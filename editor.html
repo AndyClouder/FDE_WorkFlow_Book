@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FDE 流程配置编辑器</title>
+<style>
+  :root{
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9;
+    --accent:#2563eb; --danger:#dc2626; --ok:#16a34a; --warn:#d97706;
+    --panel:#fff;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  body{font-family:"Microsoft YaHei","PingFang SC","Segoe UI",sans-serif; background:var(--bg); color:var(--ink); font-size:14px;}
+  button{font-family:inherit; cursor:pointer;}
+  input,textarea,select{font-family:inherit; color:var(--ink);}
+
+  /* ── 顶栏 ── */
+  #topbar{
+    position:sticky; top:0; z-index:60; background:#0f172a; color:#e2e8f0;
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:10px 14px;
+    box-shadow:0 2px 8px rgba(0,0,0,.25);
+  }
+  #topbar h1{font-size:15px; margin-right:6px;}
+  #topbar h1 small{font-weight:400; color:#94a3b8; font-size:11px; margin-left:6px;}
+  #topbar button{
+    background:#1e293b; color:#e2e8f0; border:1px solid #334155;
+    border-radius:6px; padding:5px 11px; font-size:12.5px;
+  }
+  #topbar button:hover{background:#334155;}
+  #topbar button.primary{background:var(--accent); border-color:var(--accent); font-weight:600;}
+  #topbar button.primary:hover{background:#1d4ed8;}
+  #saveState{font-size:11.5px; color:#94a3b8; margin-left:auto;}
+  #saveState.dirty{color:#fbbf24;}
+  #saveState.saved{color:#4ade80;}
+
+  /* ── 校验横幅 ── */
+  #vbanner{display:none; background:#fef2f2; color:#b91c1c; border-bottom:1px solid #fecaca;
+    padding:8px 14px; font-size:12.5px; line-height:1.6; cursor:pointer;}
+  #vbanner b{font-weight:700;}
+
+  /* ── 主布局 ── */
+  #layout{display:flex; height:calc(100vh - 46px); min-height:480px;}
+
+  /* 左树 */
+  #treePane{flex:none; width:295px; background:var(--panel); border-right:1px solid var(--line);
+    display:flex; flex-direction:column;}
+  #treeTabs{display:flex; border-bottom:1px solid var(--line); flex:none;}
+  #treeTabs button{flex:1; background:none; border:none; border-bottom:2.5px solid transparent;
+    padding:9px 4px; font-size:12.5px; color:var(--muted); font-weight:600;}
+  #treeTabs button.on{color:var(--accent); border-bottom-color:var(--accent);}
+  #treeScroll{flex:1; overflow-y:auto; padding:8px 6px 60px;}
+  .tnode{display:flex; align-items:center; gap:5px; padding:4px 6px; border-radius:6px; cursor:pointer;
+    font-size:12.5px; line-height:1.4; min-height:26px;}
+  .tnode:hover{background:#f1f5f9;}
+  .tnode.sel{background:#dbeafe; outline:1px solid #93c5fd;}
+  .tnode .no{flex:none; font-size:10px; color:var(--muted); font-family:Consolas,monospace; min-width:30px;}
+  .tnode .tt{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .tnode .warnref{flex:none; color:var(--danger); font-size:10px;}
+  .tind{margin-left:14px; border-left:1px dashed var(--line); padding-left:4px;}
+  #treeFoot{flex:none; border-top:1px solid var(--line); padding:8px 10px; display:flex; gap:6px; flex-wrap:wrap;}
+  #treeFoot button{flex:1; background:var(--panel); border:1px solid var(--line); border-radius:6px;
+    font-size:12px; padding:5px 6px; color:var(--ink);}
+  #treeFoot button:hover{background:#f1f5f9; border-color:#cbd5e1;}
+  #treeFoot button:disabled{opacity:.4; cursor:not-allowed;}
+
+  /* 右表单 */
+  #formPane{flex:1; overflow-y:auto; padding:16px 20px 80px;}
+  .fcard{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px; max-width:760px; margin-bottom:14px;}
+  .fcard h3{font-size:14px; margin-bottom:2px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .fcard h3 .crumb{font-size:11px; color:var(--muted); font-weight:400;}
+  .frow{display:grid; grid-template-columns:118px 1fr; gap:10px; margin-top:12px; align-items:start;}
+  .frow>label{font-size:12px; color:var(--muted); padding-top:7px; text-align:right;}
+  .frow input[type=text],.frow textarea,.frow select,.frow input[type=number]{
+    width:100%; border:1px solid var(--line); border-radius:7px; padding:7px 10px; font-size:13px; background:#fff;}
+  .frow input:focus,.frow textarea:focus,.frow select:focus{outline:none; border-color:var(--accent);}
+  .frow textarea{resize:vertical; line-height:1.6;}
+  .frow .hint{font-size:11px; color:var(--muted); margin-top:3px; line-height:1.5;}
+  .frow input.bad,.frow textarea.bad,.frow select.bad{border-color:var(--danger); background:#fef2f2;}
+  .fsec{font-size:12px; font-weight:700; color:var(--ink); letter-spacing:1px; margin:18px 0 4px;
+    padding-bottom:5px; border-bottom:1px dashed var(--line);}
+  .rep{margin-top:8px;}
+  .rep .repitem{display:grid; grid-template-columns:1fr 86px 30px; gap:6px; margin-bottom:6px; align-items:center;}
+  .rep .repitem.wide{grid-template-columns:1fr 30px;}
+  .rep input{border:1px solid var(--line); border-radius:6px; padding:6px 9px; font-size:12.5px; background:#fff; width:100%;}
+  .rep select{border:1px solid var(--line); border-radius:6px; padding:6px 4px; font-size:12px; background:#fff; width:100%;}
+  .rep .del{background:none; border:none; color:var(--muted); font-size:14px; padding:4px;}
+  .rep .del:hover{color:var(--danger);}
+  .rep .add{background:#f0f7ff; color:var(--accent); border:1px dashed #93c5fd; border-radius:6px;
+    font-size:12px; padding:5px 12px; margin-top:2px;}
+  .rep .add:hover{background:#dbeafe;}
+  .chiprow{display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;}
+  .mchip{display:inline-flex; align-items:center; gap:5px; background:#f0fdf4; border:1px solid #86efac;
+    color:#166534; border-radius:999px; padding:3px 10px; font-size:12px;}
+  .mchip.pit{background:#fef2f2; border-color:#fecaca; color:#b91c1c;}
+  .mchip.miss{background:#fef9c3; border-color:#fde047; color:#a16207;}
+  .mchip button{background:none; border:none; color:inherit; font-size:12px; padding:0 2px;}
+  .btnrow{display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;}
+  .btnrow button{border:1px solid var(--line); background:var(--panel); border-radius:7px; font-size:12.5px; padding:6px 12px;}
+  .btnrow button:hover{background:#f1f5f9;}
+  .btnrow button.danger{color:var(--danger); border-color:#fecaca;}
+  .btnrow button.danger:hover{background:#fef2f2;}
+  .empty{color:var(--muted); font-size:13px; padding:40px 10px; text-align:center;}
+  #dropOverlay{display:none; position:fixed; inset:0; background:rgba(37,99,235,.12); z-index:99;
+    border:3px dashed var(--accent); font-size:18px; color:var(--accent); font-weight:700;
+    align-items:center; justify-content:center;}
+  #toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(80px);
+    background:#0f172a; color:#fff; border-radius:8px; padding:9px 18px; font-size:13px;
+    opacity:0; transition:.25s; z-index:100; max-width:80vw;}
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  @media (max-width:760px){
+    #layout{flex-direction:column; height:auto;}
+    #treePane{width:100%; max-height:38vh; border-right:none; border-bottom:1px solid var(--line);}
+    #formPane{overflow:visible;}
+    .frow{grid-template-columns:1fr;}
+    .frow>label{text-align:left; padding-top:0;}
+  }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>✎ FDE 流程配置编辑器<small id="schemaTag"></small></h1>
+  <button id="btnNew">新建空白</button>
+  <button id="btnImport">导入 JSON</button>
+  <button id="btnExportJson">导出 JSON</button>
+  <button id="btnExportConfig" class="primary">导出 config.js</button>
+  <button id="btnValidate">校验</button>
+  <button id="btnPreview">预览</button>
+  <button id="btnReset">还原配置</button>
+  <span id="saveState"></span>
+  <input type="file" id="fileInput" accept=".json,.js" style="display:none">
+</div>
+
+<div id="vbanner"></div>
+
+<div id="layout">
+  <aside id="treePane">
+    <div id="treeTabs">
+      <button data-tab="flow" class="on">流程结构</button>
+      <button data-tab="methods">方法库</button>
+      <button data-tab="pitfalls">坑位库</button>
+      <button data-tab="meta">全局</button>
+    </div>
+    <div id="treeScroll"></div>
+    <div id="treeFoot"></div>
+  </aside>
+  <main id="formPane"><div class="empty">左侧选择或新建一个节点开始编辑</div></main>
+</div>
+
+<div id="dropOverlay">松开导入配置文件</div>
+<div id="toast"></div>
+
+<script src="data/config.js"></script>
+<script>
+"use strict";
+/* ══════════════ 状态 ══════════════ */
+var DRAFT_KEY = "fde_editor_draft";
+var state = {
+  cfg: null,          // 当前编辑的配置对象
+  sel: null,          // {type:'stage'|'step'|'activity'|'method'|'pitfall'|'meta', path:[indexes]}
+  tab: "flow",
+  undoStack: [], redoStack: []
+};
+function toast(msg, ms){
+  var t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._tm); t._tm = setTimeout(function(){ t.classList.remove("show"); }, ms||2200);
+}
+
+/* ══════════════ 初始化:草稿 > data/config.js ══════════════ */
+(function init(){
+  var loaded = false;
+  try{
+    var d = localStorage.getItem(DRAFT_KEY);
+    if(d){ state.cfg = JSON.parse(d); loaded = true; toast("已载入本地草稿(还原配置可回到文件版)"); }
+  }catch(e){}
+  if(!loaded){
+    if(!window.FDE_CONFIG){ document.body.innerHTML = "<div style='padding:40px;'>❌ data/config.js 加载失败</div>"; return; }
+    state.cfg = JSON.parse(JSON.stringify(window.FDE_CONFIG));
+  }
+  document.getElementById("schemaTag").textContent = "schema " + (state.cfg.schemaVersion||"?");
+  renderAll();
+})();
+
+/* ══════════════ 撤销 / 重做(结构快照) ══════════════ */
+function snapshot(){ undoStack.push(JSON.stringify(state.cfg)); if(undoStack.length>40) undoStack.shift(); redoStack.length=0; }
+function undo(){ if(!undoStack.length) return toast("没有可撤销的操作"); redoStack.push(JSON.stringify(state.cfg)); state.cfg = JSON.parse(undoStack.pop()); saveDraft(); renderAll(); }
+function redo(){ if(!redoStack.length) return toast("没有可重做的操作"); undoStack.push(JSON.stringify(state.cfg)); state.cfg = JSON.parse(redoStack.pop()); saveDraft(); renderAll(); }
+var undoStack = [], redoStack = [];
+
+/* ══════════════ 草稿保存 ══════════════ */
+var saveTimer = null;
+function saveDraft(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(function(){
+    try{ localStorage.setItem(DRAFT_KEY, JSON.stringify(state.cfg)); setSaveState("saved"); }
+    catch(e){ setSaveState("err"); }
+  }, 300);
+}
+function setSaveState(s){
+  var el = document.getElementById("saveState");
+  if(s==="saved"){ el.textContent = "✓ 草稿已保存 " + new Date().toTimeString().slice(0,5); el.className = "saved"; }
+  else if(s==="err"){ el.textContent = "⚠ 草稿保存失败(可能超出存储上限)"; el.className = "dirty"; }
+}
+
+/* ══════════════ 路径定位 ══════════════ */
+function getSel(){
+  var p = state.sel; if(!p) return null;
+  if(p.type==="stage") return state.cfg.stages[p.i];
+  if(p.type==="step") return state.cfg.stages[p.si].steps[p.pi];
+  if(p.type==="activity") return state.cfg.stages[p.si].steps[p.pi].activities[p.ai];
+  if(p.type==="method") return { __methodKey: p.k, __m: state.cfg.methods[p.k] };
+  if(p.type==="pitfall") return { __pitKey: p.k, __p: state.cfg.pitfalls[p.k] };
+  if(p.type==="meta") return state.cfg;
+  return null;
+}
+
+/* ══════════════ 校验 ══════════════ */
+function validate(showAll){
+  var errs = [], warns = [];
+  var cfg = state.cfg;
+  var mkeys = Object.keys(cfg.methods||{}), pkeys = Object.keys(cfg.pitfalls||{});
+  var idOk = function(k){ return cfg.methods[k]||cfg.pitfalls[k]||cfg.stages.some(function(s){return s.id===k}); };
+  var sids = {};
+  (cfg.stages||[]).forEach(function(st, si){
+    if(!st.id) errs.push("阶段["+(si+1)+"] 缺少 id");
+    else if(sids[st.id]) errs.push("阶段 id 重复:"+st.id); else sids[st.id]=1;
+    if(!st.title) errs.push("阶段 "+(st.id||si+1)+" 缺少标题");
+    if(!st.gate || !st.gate.text) warns.push("阶段 "+(st.title)+" 未定义门禁文本");
+    (st.pitfalls||[]).forEach(function(p){ if(!cfg.pitfalls[p]) errs.push("阶段「"+st.title+"」引用了不存在的坑位:"+p); });
+    (st.steps||[]).forEach(function(sp, pi){
+      if(!sp.title) errs.push("步骤 "+st.no+"."+(pi+1)+" 缺少标题");
+      (sp.activities||[]).forEach(function(a){
+        if(!a.text) errs.push("步骤「"+sp.title+"」下有空白活动");
+        if(a.ref && !idOk(a.ref)) errs.push("活动「"+(a.text||"?")+"」引用不存在的方法:"+a.ref);
+        (a.pitfallRefs||[]).forEach(function(p){ if(!cfg.pitfalls[p]) errs.push("活动「"+a.text+"」引用不存在的坑位:"+p); });
+      });
+    });
+  });
+  for(var mk in cfg.methods||{}){
+    var m = cfg.methods[mk];
+    if(!m.t) errs.push("方法 "+mk+" 缺少标题");
+    (m.pit||[]).forEach(function(p){ if(!cfg.pitfalls[p]) errs.push("方法「"+(m.t||mk)+"」引用不存在的坑位:"+p); });
+    (m.rel||[]).forEach(function(r){ if(!idOk(r)) errs.push("方法「"+(m.t||mk)+"」引用不存在的方法:"+r); });
+  }
+  for(var pk in cfg.pitfalls||{}){
+    var pp = cfg.pitfalls[pk];
+    if(!pp.t) errs.push("坑位 "+pk+" 缺少标题");
+    (pp.rel||[]).forEach(function(r){ if(!idOk(r)) errs.push("坑位「"+(pp.t||pk)+"」引用不存在:"+r); });
+  }
+  /* 未被引用的方法(仅提示) */
+  var refd = {};
+  (cfg.stages||[]).forEach(function(st){ st.steps.forEach(function(sp){ sp.activities.forEach(function(a){ if(a.ref) refd[a.ref]=1; }); }); });
+  mkeys.forEach(function(k){ if(!refd[k]) warns.push("方法「"+cfg.methods[k].t+"」("+k+") 未被任何活动引用"); });
+  pkeys.forEach(function(k){
+    var used = (cfg.stages||[]).some(function(st){ return (st.pitfalls||[]).indexOf(k)>=0 || st.steps.some(function(sp){return sp.activities.some(function(a){return (a.pitfallRefs||[]).indexOf(k)>=0})}); });
+    var usedm = mkeys.some(function(mk){ return (cfg.methods[mk].pit||[]).indexOf(k)>=0; });
+    if(!used && !usedm) warns.push("坑位「"+cfg.pitfalls[k].t+"」("+k+") 未被引用");
+  });
+  return {errs:errs, warns:warns};
+}
+function showValidation(res){
+  var b = document.getElementById("vbanner");
+  if(res.errs.length){
+    b.style.display = "block";
+    b.innerHTML = "<b>❌ "+res.errs.length+" 个错误</b>(点击展开)— "+escHtml(res.errs.slice(0,3).join(" ; "))+(res.errs.length>3?" …":"");
+    b.dataset.full = "❌ 错误 "+res.errs.length+" 条:\n· "+res.errs.join("\n· ")+"\n\n⚠ 提示 "+res.warns.length+" 条:\n· "+res.warns.join("\n· ");
+  } else if(res.warns.length){
+    b.style.display = "block";
+    b.innerHTML = "<b>⚠ "+res.warns.length+" 条提示</b>(无错误,点击展开)— "+escHtml(res.warns.slice(0,2).join(" ; "));
+    b.dataset.full = "✅ 无错误。⚠ 提示 "+res.warns.length+" 条:\n· "+res.warns.join("\n· ");
+  } else { b.style.display = "none"; }
+}
+document.getElementById("vbanner").addEventListener("click", function(){ alert(this.dataset.full||""); });
+
+/* ══════════════ 工具 ══════════════ */
+function escHtml(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function uid(){ return "x" + Date.now().toString(36).slice(-4) + Math.random().toString(36).slice(2,6); }
+function nextKey(prefix, obj){
+  var i = 1; while(obj[prefix+i]) i++; return prefix+i;
+}
+function methodChipList(sel, mutIDs){
+  var html = "";
+  (sel||[]).forEach(function(k, idx){
+    var m = state.cfg.methods[k];
+    if(m) html += '<span class="mchip">'+escHtml(m.t)+' <span style="opacity:.6">'+escHtml(k)+'</span><button title="移除" data-act="delrel" data-i="'+idx+'">✕</button></span>';
+    else html += '<span class="mchip miss">⚠ 不存在:'+escHtml(k)+' <button data-act="delrel" data-i="'+idx+'">✕</button></span>';
+  });
+  html += '<button class="rep add" data-act="addrel">+ 关联方法</button>';
+  return '<div class="chiprow">'+html+'</div>';
+}
+function pitChipList(sel, mutIDs){
+  var html = "";
+  (sel||[]).forEach(function(k, idx){
+    var p = state.cfg.pitfalls[k];
+    if(p) html += '<span class="mchip pit">⚠ '+escHtml(p.t)+' <button title="移除" data-act="delpit" data-i="'+idx+'">✕</button></span>';
+    else html += '<span class="mchip miss">⚠ 不存在:'+escHtml(k)+' <button data-act="delpit" data-i="'+idx+'">✕</button></span>';
+  });
+  html += '<button class="rep add" data-act="addpit">+ 关联坑位</button>';
+  return '<div class="chiprow">'+html+'</div>';
+}
+function pickerDialog(kind){
+  var pool, txt;
+  if(kind==="method"){ pool = state.cfg.methods; }
+  else { pool = state.cfg.pitfalls; }
+  var lines = [];
+  for(var k in pool){
+    var v = pool[k];
+    lines.push(k + "  —  " + v.t + (v.cat?" ["+v.cat+"]":""));
+  }
+  var msg = kind==="method" ? "输入要关联的方法 id(左列),确定后添加:\n\n" : "输入要关联的坑位 id(左列),确定后添加:\n\n";
+  var input = prompt(msg + lines.join("\n"), "");
+  if(input===null) return null;
+  input = input.trim().split(/[\s,，]+/)[0];
+  return input || null;
+}
+
+/* ══════════════ 左树渲染 ══════════════ */
+function renderTree(){
+  var el = document.getElementById("treeScroll");
+  var html = "";
+  var cfg = state.cfg;
+  if(state.tab==="flow"){
+    cfg.stages.forEach(function(st, si){
+      var selStage = state.sel && state.sel.type==="stage" && state.sel.i===si;
+      html += '<div class="tnode'+(selStage?" sel":"")+'" data-nav="stage:'+si+'"><span class="no">'+escHtml(st.no)+'</span><span class="tt">'+escHtml(st.title)+'</span></div>';
+      html += '<div class="tind">';
+      st.steps.forEach(function(sp, pi){
+        var selStep = state.sel && state.sel.type==="step" && state.sel.si===si && state.sel.pi===pi;
+        html += '<div class="tnode'+(selStep?" sel":"")+'" data-nav="step:'+si+':'+pi+'"><span class="no">'+escHtml(st.no)+'.'+(pi+1)+'</span><span class="tt">'+escHtml(sp.title)+'</span></div>';
+        sp.activities.forEach(function(a, ai){
+          var selA = state.sel && state.sel.type==="activity" && state.sel.si===si && state.sel.pi===pi && state.sel.ai===ai;
+          var badref = a.ref && !(cfg.methods[a.ref]||cfg.pitfalls[a.ref]) ? '<span class="warnref">⚠</span>' : '';
+          html += '<div class="tnode'+(selA?" sel":"")+'" data-nav="activity:'+si+':'+pi+':'+ai+'"><span class="no">'+escHtml(st.no)+'.'+(pi+1)+'.'+(ai+1)+'</span><span class="tt">'+escHtml(a.text)+'</span>'+badref+'</div>';
+        });
+      });
+      html += '</div>';
+    });
+  } else if(state.tab==="methods"){
+    var refCount = {};
+    cfg.stages.forEach(function(st){ st.steps.forEach(function(sp){ sp.activities.forEach(function(a){ if(a.ref) refCount[a.ref]=(refCount[a.ref]||0)+1; }); }); });
+    Object.keys(cfg.methods).sort(function(a,b){ return cfg.methods[a].t.localeCompare(cfg.methods[b].t,"zh"); }).forEach(function(k){
+      var m = cfg.methods[k];
+      var selM = state.sel && state.sel.type==="method" && state.sel.k===k;
+      var cnt = refCount[k]||0;
+      html += '<div class="tnode'+(selM?" sel":"")+'" data-nav="method:'+escHtml(k)+'"><span class="no">'+escHtml(k)+'</span><span class="tt">'+escHtml(m.t)+'</span>'+(cnt?'<span class="warnref" style="color:#16a34a" title="被引用 '+cnt+' 次">●'+cnt+'</span>':'<span class="warnref" title="未被引用">○</span>')+'</div>';
+    });
+  } else if(state.tab==="pitfalls"){
+    Object.keys(cfg.pitfalls).forEach(function(k){
+      var p = cfg.pitfalls[k];
+      var selP = state.sel && state.sel.type==="pitfall" && state.sel.k===k;
+      html += '<div class="tnode'+(selP?" sel":"")+'" data-nav="pitfall:'+escHtml(k)+'"><span class="no">'+escHtml(k)+'</span><span class="tt">'+escHtml(p.t)+'</span></div>';
+    });
+  } else if(state.tab==="meta"){
+    var selX = state.sel && state.sel.type==="meta";
+    html += '<div class="tnode'+(selX?" sel":"")+'" data-nav="meta"><span class="tt">📄 标题 / 副标题 / 图例说明</span></div>';
+    html += '<div class="tind">';
+    (cfg.lanes||[]).forEach(function(l, li){
+      var selL = state.sel && state.sel.type==="lane" && state.sel.li===li;
+      html += '<div class="tnode'+(selL?" sel":"")+'" data-nav="lane:'+li+'"><span class="tt">'+escHtml((l.icon||"")+" "+l.title)+'</span></div>';
+    });
+    html += '</div>';
+    var selF = state.sel && state.sel.type==="footer";
+    html += '<div class="tnode'+(selF?" sel":"")+'" data-nav="footer"><span class="tt">🦶 页脚来源说明</span></div>';
+  }
+  el.innerHTML = html;
+
+  var foot = document.getElementById("treeFoot");
+  var fb = "";
+  if(state.tab==="flow"){
+    fb += '<button id="fa-addstage">＋ 阶段</button>';
+    var s = state.sel;
+    if(s && (s.type==="stage"||s.type==="step"||s.type==="activity")){
+      if(s.type==="stage") fb += '<button id="fa-addstep">＋ 步骤</button>';
+      if(s.type==="step")  fb += '<button id="fa-addact">＋ 活动</button>';
+      fb += '<button id="fa-up">↑ 上移</button><button id="fa-down">↓ 下移</button><button id="fa-del" style="color:#dc2626">🗑 删除</button>';
+    }
+  } else if(state.tab==="methods"){
+    fb += '<button id="fa-addmethod">＋ 方法</button>';
+    if(state.sel && state.sel.type==="method") fb += '<button id="fa-delmethod" style="color:#dc2626">🗑 删除方法</button>';
+  } else if(state.tab==="pitfalls"){
+    fb += '<button id="fa-addpit">＋ 坑位</button>';
+    if(state.sel && state.sel.type==="pitfall") fb += '<button id="fa-delpit" style="color:#dc2626">🗑 删除坑位</button>';
+  } else if(state.tab==="meta"){
+    fb += '<button id="fa-addlane">＋ 横切线</button>';
+    if(state.sel && state.sel.type==="lane") fb += '<button id="fa-dellane" style="color:#dc2626">🗑 删除横切线</button>';
+  }
+  foot.innerHTML = fb;
+}
+document.getElementById("treeScroll").addEventListener("click", function(ev){
+  var n = ev.target.closest(".tnode"); if(!n) return;
+  var parts = n.dataset.nav.split(":");
+  if(parts[0]==="stage") state.sel = {type:"stage", i:+parts[1]};
+  else if(parts[0]==="step") state.sel = {type:"step", si:+parts[1], pi:+parts[2]};
+  else if(parts[0]==="activity") state.sel = {type:"activity", si:+parts[1], pi:+parts[2], ai:+parts[3]};
+  else if(parts[0]==="method") state.sel = {type:"method", k:parts[1]};
+  else if(parts[0]==="pitfall") state.sel = {type:"pitfall", k:parts[1]};
+  else if(parts[0]==="meta") state.sel = {type:"meta"};
+  else if(parts[0]==="lane") state.sel = {type:"lane", li:+parts[1]};
+  else if(parts[0]==="footer") state.sel = {type:"footer"};
+  renderAll();
+});
+
+/* ══════════════ 右表单渲染 ══════════════ */
+function fld(label, inner, hint){ return '<div class="frow"><label>'+label+'</label><div>'+inner+(hint?'<div class="hint">'+hint+'</div>':'')+'</div></div>'; }
+function inp(id, val, ph){ return '<input type="text" id="'+id+'" value="'+escHtml(val)+'" placeholder="'+escHtml(ph||"")+'">'; }
+function ta(id, val, rows, ph){ return '<textarea id="'+id+'" rows="'+(rows||3)+'" placeholder="'+escHtml(ph||"")+'">'+escHtml(val)+'</textarea>'; }
+function selHtml(id, opts, cur){ var h='<select id="'+id+'">'; opts.forEach(function(o){ h+='<option value="'+escHtml(o[0])+'"'+(o[0]===cur?" selected":"")+'>'+escHtml(o[1])+'</option>'; }); return h+'</select>'; }
+
+function renderForm(){
+  var pane = document.getElementById("formPane");
+  var sel = state.sel;
+  if(!sel){ pane.innerHTML = '<div class="empty">左侧选择或新建一个节点开始编辑</div>'; return; }
+  var cfg = state.cfg;
+  var html = "";
+
+  if(sel.type==="stage"){
+    var st = cfg.stages[sel.i];
+    var si = sel.i;
+    html += '<div class="fcard"><h3>阶段 '+st.no+' <span class="crumb">stages['+si+']</span></h3>';
+    html += fld("阶段标题", inp("st-title", st.title, "如:POC 方案与最小验证"));
+    html += fld("ID", inp("st-id", st.id, "唯一标识,如 s3"), "引用与跳转依据;修改后引用此阶段的节点不受影响(id 仅用于阶段自身定位)");
+    html += fld("颜色", selHtml("st-color", [["c1","蓝 c1"],["c2","紫 c2"],["c3","青 c3"],["c4","绿 c4"],["c5","橙 c5"],["c6","红 c6"],["c7","靛 c7"]], st.color));
+    html += fld("导航短名", inp("st-short", st.shortName||"", "顶部快捷导航按钮文字,如:3 · POC 验证"));
+    html += fld("别名行", inp("st-alias", st.alias||"", "卡头下方的小字,如:五阶段:xxx · 六步法:xxx"));
+    html += fld("阶段目标", ta("st-goal", st.goal||"", 3, "这个阶段要达成什么"));
+    html += '</div>';
+
+    html += '<div class="fcard"><h3>🚪 出门禁 <span class="crumb">'+(st.gate&&st.gate.id||"")+'</span></h3>';
+    var g = st.gate||{};
+    html += fld("门禁编号", inp("g-id", g.id||"", "如 G3"));
+    html += fld("门禁名称", inp("g-label", g.label||"", "如:验证门"));
+    html += fld("判据(全文)", ta("g-text", g.text||"", 3, "过门的总判据"));
+    html += fld("卡面短句", inp("g-short", g.short||"", "地图列上门禁条的文字(留空则用判据全文)"));
+    html += '<div class="fsec">检查清单(逐条判据,可附证据)</div><div class="rep" id="g-chk">';
+    (g.checklist||[]).forEach(function(c, i){
+      html += '<div class="repitem wide"><input data-chk="item" data-i="'+i+'" value="'+escHtml(c.item)+'" placeholder="检查项,如:闭环四段真实跑通"></div>';
+      html += '<div class="repitem wide"><input data-chk="ev" data-i="'+i+'" value="'+escHtml(c.evidence||"")+'" placeholder="证据(可选),如:MVD 演示记录" style="background:#fffbeb"></div>';
+    });
+    html += '<button class="rep add" id="g-addchk">+ 检查项</button><button class="rep add" id="g-delchk" style="border-color:#fecaca;color:#dc2626">− 删最后一项</button></div>';
+    html += '</div>';
+
+    html += '<div class="fcard"><h3>📦 关键产出</h3><div class="rep" id="st-outs">';
+    (st.outputs||[]).forEach(function(o,i){
+      html += '<div class="repitem"><input data-out="name" data-i="'+i+'" value="'+escHtml(o.name)+'" placeholder="产出物名称">'+selHtml(null,[["1","必产物"],["0","可选"]], o.required===false?"0":"1").replace('<select','<select data-out="req" data-i="'+i+'"')+'<button class="del" data-out="del" data-i="'+i+'">✕</button></div>';
+    });
+    html += '<button class="rep add" id="st-addout">+ 产出物</button></div>';
+    html += '<div class="fcard"><h3>⚠ 关联坑位 / 🔗 相关方法</h3>';
+    html += fld("坑位", pitChipList(st.pitfalls));
+    html += fld("方法", methodChipList(st.related));
+    html += fld("阶段心得", ta("st-note", st.note||"", 3));
+    html += '</div>';
+  }
+
+  else if(sel.type==="step"){
+    var stg = cfg.stages[sel.si];
+    var sp = stg.steps[sel.pi];
+    html += '<div class="fcard"><h3>步骤 '+stg.no+'.'+(sel.pi+1)+' <span class="crumb">阶段「'+escHtml(stg.title)+'」</span></h3>';
+    html += fld("步骤标题", inp("sp-title", sp.title, "如:MVD 最小闭环实施"), "编号自动按位置计算,无需手填");
+    html += '</div>';
+    html += '<div class="fcard"><h3>🧭 本步骤下的活动('+sp.activities.length+')</h3>';
+    if(!sp.activities.length) html += '<div class="hint" style="margin:6px 0">暂无活动,点左下「＋ 活动」添加</div>';
+    sp.activities.forEach(function(a, ai){
+      html += '<div class="fsec">'+stg.no+'.'+(sel.pi+1)+'.'+(ai+1)+'</div>';
+      html += fld("活动内容", ta("ac-text-"+ai, a.text, 2, "这一步具体做什么"));
+      var mopts = [["","(不关联)"]].concat(Object.keys(cfg.methods).map(function(k){ return [k, cfg.methods[k].t+" ("+k+")"]; }));
+      html += fld("关联方法", selHtml("ac-ref-"+ai, mopts, a.ref||""), "点击活动行时弹出的方法详情");
+      html += fld("关联坑位", pitChipList(a.pitfallRefs, "act-"+ai));
+      html += fld("活动门禁", inp("ac-gate-"+ai, a.gate||"", "完成标准(可选),如:四段缺一段即不算 MVD"), "填写后地图行上会出现 ✓ 标记");
+      html += '<div class="rep" id="ac-outs-'+ai+'">';
+      (a.outputs||[]).forEach(function(o,oi){
+        html += '<div class="repitem"><input data-out="name" data-scope="'+ai+'" data-i="'+oi+'" value="'+escHtml(o.name)+'" placeholder="产出物名称">'+selHtml(null,[["1","必产"],["0","可选"]], o.required===false?"0":"1").replace('<select','<select data-out="req" data-scope="'+ai+'" data-i="'+oi+'"')+'<button class="del" data-out="del" data-scope="'+ai+'" data-i="'+oi+'">✕</button></div>';
+      });
+      html += '<button class="rep add" data-addout="'+ai+'">+ 产出物</button></div>';
+    });
+    html += '</div>';
+  }
+
+  else if(sel.type==="activity"){
+    /* 兼容从校验跳转:重定向到所属步骤视图 */
+    state.sel = {type:"step", si:sel.si, pi:sel.pi};
+    return renderForm();
+  }
+
+  else if(sel.type==="method"){
+    var mk = sel.k, m = cfg.methods[mk];
+    html += '<div class="fcard"><h3>方法:'+escHtml(m.t||mk)+' <span class="crumb">methods.'+escHtml(mk)+'</span></h3>';
+    html += fld("标题", inp("m-t", m.t||"", "方法名称"));
+    html += fld("类别", selHtml("m-cat", [["打法","打法"],["概念","概念"]], m.cat||"打法"));
+    html += fld("来源", inp("m-src", m.src||"", "如:POC课(训练营录音)"));
+    html += fld("一句话", ta("m-one", m.one||"", 3, "这个方法是什么"));
+    html += fld("怎么用(每行一条)", ta("m-how", (m.how||[]).join("\n"), 8, "每行一条,保存时自动按行拆分"));
+    html += fld("小例子", ta("m-ex", m.ex||"", 3));
+    html += fld("关联坑位", pitChipList(m.pit));
+    html += fld("相关方法", methodChipList(m.rel));
+    html += '</div>';
+  }
+
+  else if(sel.type==="pitfall"){
+    var pk = sel.k, p = cfg.pitfalls[pk];
+    html += '<div class="fcard"><h3>坑位:'+escHtml(p.t||pk)+' <span class="crumb">pitfalls.'+escHtml(pk)+'</span></h3>';
+    html += fld("标题", inp("p-t", p.t||"", "如:坑1 · Demo 到生产翻车"));
+    html += fld("症状(怎么死)", ta("p-sym", p.sym||"", 3));
+    html += fld("成因", ta("p-cause", p.cause||"", 3));
+    html += fld("怎么堵", ta("p-fix", p.fix||"", 4));
+    html += fld("相关方法", methodChipList(p.rel));
+    html += '</div>';
+  }
+
+  else if(sel.type==="meta"){
+    var mt = cfg.meta||{};
+    html += '<div class="fcard"><h3>📄 全局信息</h3>';
+    html += fld("主标题", inp("mt-title", mt.title||""));
+    html += fld("副标题", inp("mt-subtitle", mt.subtitle||""));
+    html += fld("工具栏说明", inp("mt-sub", mt.sub||"", "顶栏下方小字说明"));
+    html += '</div>';
+    html += '<div class="fcard"><h3>🦶 页脚</h3>';
+    html += fld("页脚内容", ta("ft-text", cfg.footer||"", 5, "支持少量 HTML 标签(b/span)"));
+    html += '</div>';
+  }
+
+  else if(sel.type==="lane"){
+    var ln = cfg.lanes[sel.li];
+    html += '<div class="fcard"><h3>横切线 <span class="crumb">lanes['+sel.li+']</span></h3>';
+    html += fld("图标", inp("ln-icon", ln.icon||"", "如:🧭"));
+    html += fld("标题", inp("ln-title", ln.title||"", "如:责任线(贯穿 G1–G7)"));
+    html += fld("样式类", selHtml("ln-cls", [["lane-resp","责任线(红)"],["lane-colla","协作线(蓝)"],["lane-accu","沉淀线(青)"],["","无色条"]], ln.cls||""));
+    html += fld("内容(支持HTML)", ta("ln-body", ln.body||"", 4));
+    html += '</div>';
+  }
+
+  pane.innerHTML = html;
+}
+
+/* ══════════════ 表单事件:输入即改内存 + 存草稿 ══════════════ */
+document.getElementById("formPane").addEventListener("input", function(ev){
+  var t = ev.target, sel = state.sel; if(!sel) return;
+  var v = t.value, cfg = state.cfg;
+  var touched = false;
+  if(sel.type==="stage"){
+    var st = cfg.stages[sel.i];
+    if(t.id==="st-title") { st.title=v; touched=true; }
+    else if(t.id==="st-id"){ var old=st.id; st.id=v; if(old!==v){ /* 同步引用 */ } touched=true; }
+    else if(t.id==="st-color"){ st.color=v; touched=true; }
+    else if(t.id==="st-short"){ st.shortName=v; touched=true; }
+    else if(t.id==="st-alias"){ st.alias=v; touched=true; }
+    else if(t.id==="st-goal"){ st.goal=v; touched=true; }
+    else if(t.id==="g-id"){ st.gate=st.gate||{}; st.gate.id=v; touched=true; }
+    else if(t.id==="g-label"){ st.gate=st.gate||{}; st.gate.label=v; touched=true; }
+    else if(t.id==="g-text"){ st.gate=st.gate||{}; st.gate.text=v; touched=true; }
+    else if(t.id==="g-short"){ st.gate=st.gate||{}; st.gate.short=v; touched=true; }
+    else if(t.id==="st-note"){ st.note=v; touched=true; }
+    else if(t.dataset && t.dataset.chk!==undefined){
+      var i = +t.dataset.i;
+      if(t.dataset.chk==="item"){ st.gate.checklist[i].item=v; } else { st.gate.checklist[i].evidence=v; }
+      touched=true;
+    }
+    else if(t.dataset && t.dataset.out==="name"){ st.outputs[+t.dataset.i].name=v; touched=true; }
+  }
+  else if(sel.type==="step"){
+    var sp = cfg.stages[sel.si].steps[sel.pi];
+    if(t.id==="sp-title"){ sp.title=v; touched=true; }
+    else if(t.id && t.id.indexOf("ac-text-")===0){ var ai=+t.id.slice(8); sp.activities[ai].text=v; touched=true; }
+    else if(t.id && t.id.indexOf("ac-ref-")===0){ var ai2=+t.id.slice(7); sp.activities[ai2].ref=v; touched=true; }
+    else if(t.id && t.id.indexOf("ac-gate-")===0){ var ai3=+t.id.slice(8); sp.activities[ai3].gate=v; touched=true; }
+    else if(t.dataset && t.dataset.out==="name"){ sp.activities[+t.dataset.scope].outputs[+t.dataset.i].name=v; touched=true; }
+  }
+  else if(sel.type==="method"){
+    var m = cfg.methods[sel.k];
+    if(t.id==="m-t"){ m.t=v; touched=true; }
+    else if(t.id==="m-cat"){ m.cat=v; touched=true; }
+    else if(t.id==="m-src"){ m.src=v; touched=true; }
+    else if(t.id==="m-one"){ m.one=v; touched=true; }
+    else if(t.id==="m-how"){ m.how=v.split("\n").filter(function(x){return x.trim()!==""}); touched=true; }
+    else if(t.id==="m-ex"){ m.ex=v; touched=true; }
+  }
+  else if(sel.type==="pitfall"){
+    var p = cfg.pitfalls[sel.k];
+    if(t.id==="p-t"){ p.t=v; touched=true; }
+    else if(t.id==="p-sym"){ p.sym=v; touched=true; }
+    else if(t.id==="p-cause"){ p.cause=v; touched=true; }
+    else if(t.id==="p-fix"){ p.fix=v; touched=true; }
+  }
+  else if(sel.type==="meta"){
+    if(t.id==="mt-title"){ cfg.meta.title=v; touched=true; }
+    else if(t.id==="mt-subtitle"){ cfg.meta.subtitle=v; touched=true; }
+    else if(t.id==="mt-sub"){ cfg.meta.sub=v; touched=true; }
+    else if(t.id==="ft-text"){ cfg.footer=v; touched=true; }
+  }
+  else if(sel.type==="lane"){
+    var ln = cfg.lanes[sel.li];
+    if(t.id==="ln-icon"){ ln.icon=v; touched=true; }
+    else if(t.id==="ln-title"){ ln.title=v; touched=true; }
+    else if(t.id==="ln-cls"){ ln.cls=v; touched=true; }
+    else if(t.id==="ln-body"){ ln.body=v; touched=true; }
+  }
+  if(touched){ saveDraft(); scheduleLightTree(); }
+});
+/* select 变化(input 不触发) */
+document.getElementById("formPane").addEventListener("change", function(ev){
+  var t = ev.target, sel = state.sel; if(!sel) return;
+  var cfg = state.cfg;
+  if(sel.type==="stage"){
+    var st = cfg.stages[sel.i];
+    if(t.id==="st-color"){ st.color=t.value; saveDraft(); renderAll(); return; }
+    if(t.dataset && t.dataset.out==="req"){ st.outputs[+t.dataset.i].required = t.value!=="0"; saveDraft(); return; }
+  }
+  else if(sel.type==="step"){
+    var sp = cfg.stages[sel.si].steps[sel.pi];
+    if(t.id && t.id.indexOf("ac-ref-")===0){ sp.activities[+t.id.slice(7)].ref=t.value; saveDraft(); scheduleLightTree(); return; }
+    if(t.dataset && t.dataset.out==="req"){ sp.activities[+t.dataset.scope].outputs[+t.dataset.i].required = t.value!=="0"; saveDraft(); return; }
+  }
+  else if(sel.type==="method"){ if(t.id==="m-cat"){ cfg.methods[sel.k].cat=t.value; saveDraft(); return; } }
+  else if(sel.type==="lane"){ if(t.id==="ln-cls"){ cfg.lanes[sel.li].cls=t.value; saveDraft(); return; } }
+});
+/* 点击类动作(chip 增删 / 产出物增删 / 检查项增删) */
+document.getElementById("formPane").addEventListener("click", function(ev){
+  var b = ev.target.closest("[data-act],[data-addout],#st-addout,#g-addchk,#g-delchk"); if(!b) return;
+  var sel = state.sel; if(!sel) return;
+  var cfg = state.cfg;
+  var act = b.dataset.act;
+  function arrFor(){
+    if(sel.type==="stage") return {pit: cfg.stages[sel.i].pitfalls, rel: cfg.stages[sel.i].related};
+    if(sel.type==="step") return {pit: cfg.stages[sel.si].steps[sel.pi].activities[b.dataset.scope] ? cfg.stages[sel.si].steps[sel.pi].activities[+b.dataset.scope].pitfallRefs : null, rel:null};
+    if(sel.type==="method") return {pit: cfg.methods[sel.k].pit, rel: cfg.methods[sel.k].rel};
+    if(sel.type==="pitfall") return {pit:null, rel: cfg.pitfalls[sel.k].rel};
+    return {pit:null,rel:null};
+  }
+  if(act==="delrel"||act==="addrel"){
+    var a1 = arrFor(); if(!a1.rel) return;
+    if(act==="delrel") a1.rel.splice(+b.dataset.i,1);
+    else { var k1 = pickerDialog("method"); if(k1){ if(a1.rel.indexOf(k1)<0) a1.rel.push(k1); else toast("已关联过:"+k1); } }
+    saveDraft(); renderAll(); return;
+  }
+  if(act==="delpit"||act==="addpit"){
+    var a2 = arrFor(); if(!a2.pit) return;
+    if(act==="delpit") a2.pit.splice(+b.dataset.i,1);
+    else { var k2 = pickerDialog("pitfall"); if(k2){ if(a2.pit.indexOf(k2)<0) a2.pit.push(k2); else toast("已关联过:"+k2); } }
+    saveDraft(); renderAll(); return;
+  }
+  if(b.id==="st-addout"){ cfg.stages[sel.i].outputs.push({name:"",required:true}); saveDraft(); renderAll(); return; }
+  if(b.id==="g-addchk"){ var st2=cfg.stages[sel.i]; st2.gate=st2.gate||{}; st2.gate.checklist=st2.gate.checklist||[]; st2.gate.checklist.push({item:"",evidence:""}); saveDraft(); renderAll(); return; }
+  if(b.id==="g-delchk"){ var st3=cfg.stages[sel.i]; if(st3.gate&&st3.gate.checklist&&st3.gate.checklist.length) st3.gate.checklist.pop(); saveDraft(); renderAll(); return; }
+  if(b.dataset.out==="del"){
+    if(sel.type==="stage") cfg.stages[sel.i].outputs.splice(+b.dataset.i,1);
+    else if(sel.type==="step") cfg.stages[sel.si].steps[sel.pi].activities[+b.dataset.scope].outputs.splice(+b.dataset.i,1);
+    saveDraft(); renderAll(); return;
+  }
+  if(b.dataset.addout!==undefined){
+    cfg.stages[sel.si].steps[sel.pi].activities[+b.dataset.addout].outputs.push({name:"",required:true});
+    saveDraft(); renderAll(); return;
+  }
+});
+
+/* 输入时轻量刷新左树(节流,不重绘表单以免丢焦点) */
+var lightTimer = null;
+function scheduleLightTree(){ clearTimeout(lightTimer); lightTimer = setTimeout(renderTree, 400); }
+
+/* ══════════════ 底部操作按钮 ══════════════ */
+document.getElementById("treeFoot").addEventListener("click", function(ev){
+  var b = ev.target.closest("button"); if(!b) return;
+  var cfg = state.cfg, sel = state.sel;
+  function confirmDel(msg){ return confirm(msg); }
+  if(b.id==="fa-addstage"){
+    snapshot();
+    cfg.stages.push({id:"s"+(cfg.stages.length+1)+"_"+uid().slice(1), no:String(cfg.stages.length+1), color:"c"+((cfg.stages.length)%7+1), title:"新阶段", alias:"", goal:"", gate:{id:"G"+(cfg.stages.length+1), label:"门", short:"", text:"", checklist:[]}, outputs:[], note:"", pitfalls:[], related:[], steps:[]});
+    state.sel = {type:"stage", i:cfg.stages.length-1}; state.tab="flow";
+    saveDraft(); renderAll(); return;
+  }
+  if(b.id==="fa-addstep" && sel && sel.type==="stage"){
+    snapshot();
+    cfg.stages[sel.i].steps.push({title:"新步骤", activities:[]});
+    state.sel = {type:"step", si:sel.i, pi:cfg.stages[sel.i].steps.length-1};
+    saveDraft(); renderAll(); return;
+  }
+  if(b.id==="fa-addact" && sel && sel.type==="step"){
+    snapshot();
+    cfg.stages[sel.si].steps[sel.pi].activities.push({text:"新活动", ref:"", outputs:[], gate:"", pitfallRefs:[]});
+    saveDraft(); renderAll(); return;
+  }
+  if(b.id==="fa-up" || b.id==="fa-down"){
+    if(!sel) return;
+    snapshot();
+    var dir = b.id==="fa-up" ? -1 : 1;
+    function move(arr, i){ var j=i+dir; if(j<0||j>=arr.length) return false; var t=arr[i]; arr[i]=arr[j]; arr[j]=t; return true; }
+    if(sel.type==="stage" && move(cfg.stages, sel.i)){ /* ok */ }
+    else if(sel.type==="step"){ if(move(cfg.stages[sel.si].steps, sel.pi)){} else { snapshot.pop&&undoStack.pop(); } }
+    else if(sel.type==="activity"){ if(move(cfg.stages[sel.si].steps[sel.pi].activities, sel.ai)){} }
+    saveDraft(); renderAll(); return;
+  }
+  if(b.id==="fa-del"){
+    if(!sel) return;
+    var names = {stage:"整个阶段(含全部步骤与活动)", step:"该步骤(含其下活动)", activity:"该活动"};
+    if(!confirmDel("确认删除 "+names[sel.type]+" ?此操作可用撤销(Ctrl+Z)恢复。")) return;
+    snapshot();
+    if(sel.type==="stage"){ cfg.stages.splice(sel.i,1); state.sel=null; }
+    else if(sel.type==="step"){ cfg.stages[sel.si].steps.splice(sel.pi,1); state.sel={type:"stage", i:sel.si}; }
+    else if(sel.type==="activity"){ cfg.stages[sel.si].steps[sel.pi].activities.splice(sel.ai,1); state.sel={type:"step", si:sel.si, pi:sel.pi}; }
+    saveDraft(); renderAll(); return;
+  }
+  if(b.id==="fa-addmethod"){
+    var nk = nextKey("m", cfg.methods);
+    snapshot();
+    cfg.methods[nk] = {cat:"打法", t:"新方法", src:"", one:"", how:[], ex:"", pit:[], rel:[]};
+    state.sel = {type:"method", k:nk}; state.tab="methods";
+    saveDraft(); renderAll(); return;
+  }
+  if(b.id==="fa-delmethod" && sel && sel.type==="method"){
+    var mk = sel.k;
+    var refs = [];
+    cfg.stages.forEach(function(st){ st.steps.forEach(function(sp){ sp.activities.forEach(function(a){ if(a.ref===mk) refs.push(a.text); }); }); });
+    if(refs.length && !confirm("方法 "+mk+" 仍被 "+refs.length+" 个活动引用(如「"+refs[0]+"」),删除后这些活动将无详情可弹。仍要删除?")) return;
+    snapshot();
+    delete cfg.methods[mk]; state.sel=null;
+    saveDraft(); renderAll(); return;
+  }
+  if(b.id==="fa-addpit"){
+    var pk2 = nextKey("k", cfg.pitfalls);
+    snapshot();
+    cfg.pitfalls[pk2] = {cat:"坑位", t:"新坑位", sym:"", cause:"", fix:"", rel:[]};
+    state.sel = {type:"pitfall", k:pk2}; state.tab="pitfalls";
+    saveDraft(); renderAll(); return;
+  }
+  if(b.id==="fa-delpit" && sel && sel.type==="pitfall"){
+    var pk3 = sel.k;
+    var refs2 = 0;
+    cfg.stages.forEach(function(st){ if((st.pitfalls||[]).indexOf(pk3)>=0) refs2++; st.steps.forEach(function(sp){ sp.activities.forEach(function(a){ if((a.pitfallRefs||[]).indexOf(pk3)>=0) refs2++; }); }); });
+    if(refs2 && !confirm("坑位 "+pk3+" 仍被 "+refs2+" 处引用,删除后引用悬空。仍要删除?")) return;
+    snapshot();
+    delete cfg.pitfalls[pk3]; state.sel=null;
+    saveDraft(); renderAll(); return;
+  }
+  if(b.id==="fa-addlane"){
+    snapshot();
+    cfg.lanes.push({cls:"", icon:"🔗", title:"新横切线", body:""});
+    state.sel = {type:"lane", li:cfg.lanes.length-1}; state.tab="meta";
+    saveDraft(); renderAll(); return;
+  }
+  if(b.id==="fa-dellane" && sel && sel.type==="lane"){
+    if(!confirm("确认删除该横切线?")) return;
+    snapshot();
+    cfg.lanes.splice(sel.li,1); state.sel={type:"meta"};
+    saveDraft(); renderAll(); return;
+  }
+});
+
+/* ══════════════ 顶栏按钮 ══════════════ */
+function downloadFile(name, content, mime){
+  var blob = new Blob([content], {type: mime||"text/plain"});
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 100);
+}
+function configJsContent(cfg){
+  return "/* FDE 交付全流程配置(单一事实来源)\n * 由 editor.html 导出;覆盖 data/config.js 后 app.html 即生效。\n * 查看页:app.html  编辑器:editor.html  快照:index.html\n */\nwindow.FDE_CONFIG = " + JSON.stringify(cfg, null, 2) + ";\n";
+}
+document.getElementById("btnExportConfig").addEventListener("click", function(){
+  var res = validate();
+  if(res.errs.length && !confirm("当前配置存在 "+res.errs.length+" 个错误,仍要导出?")) return;
+  downloadFile("config.js", configJsContent(state.cfg), "text/javascript");
+  toast("已导出 config.js — 覆盖项目 data/config.js 后生效");
+});
+document.getElementById("btnExportJson").addEventListener("click", function(){
+  downloadFile("fde-config-"+new Date().toISOString().slice(0,10)+".json", JSON.stringify(state.cfg, null, 2), "application/json");
+  toast("已导出 JSON 备份");
+});
+document.getElementById("btnImport").addEventListener("click", function(){ document.getElementById("fileInput").click(); });
+document.getElementById("fileInput").addEventListener("change", function(){
+  var f = this.files[0]; if(!f) return;
+  var rd = new FileReader();
+  rd.onload = function(){
+    try{
+      var txt = String(rd.result);
+      var cfg = null;
+      if(/window\.FDE_CONFIG\s*=/.test(txt)){
+        var m = txt.match(/window\.FDE_CONFIG\s*=\s*([\s\S]+?);\s*$/);
+        cfg = JSON.parse(m ? m[1] : txt.replace(/^[^=]*=/,"").replace(/;\s*$/,""));
+      } else cfg = JSON.parse(txt);
+      if(!cfg.stages) throw new Error("缺少 stages 字段");
+      snapshot();
+      state.cfg = cfg; state.sel = null;
+      saveDraft(); renderAll();
+      toast("导入成功:"+cfg.stages.length+" 个阶段");
+    }catch(e){ alert("导入失败:"+e.message); }
+  };
+  rd.readAsText(f);
+  this.value = "";
+});
+document.getElementById("btnNew").addEventListener("click", function(){
+  if(!confirm("新建空白配置将替换当前编辑内容(草稿被覆盖,可先导出 JSON 备份)。继续?")) return;
+  snapshot();
+  state.cfg = {schemaVersion:"1.0", meta:{title:"新流程图", subtitle:"", sub:""}, stages:[], methods:{}, pitfalls:{}, lanes:[], footer:""};
+  state.sel = null;
+  saveDraft(); renderAll();
+});
+document.getElementById("btnReset").addEventListener("click", function(){
+  if(!confirm("放弃当前草稿,还原为 data/config.js 文件内容?")) return;
+  if(!window.FDE_CONFIG) return toast("没有可还原的文件版配置");
+  snapshot();
+  state.cfg = JSON.parse(JSON.stringify(window.FDE_CONFIG));
+  state.sel = null;
+  saveDraft(); renderAll();
+  toast("已还原为文件版配置");
+});
+document.getElementById("btnValidate").addEventListener("click", function(){
+  var res = validate();
+  showValidation(res);
+  if(!res.errs.length && !res.warns.length) toast("✅ 校验通过,无错误无提示");
+  else if(!res.errs.length) toast("✅ 无错误,"+res.warns.length+" 条提示(见顶部横幅)");
+});
+document.getElementById("btnPreview").addEventListener("click", function(){
+  var res = validate();
+  if(res.errs.length){ showValidation(res); return toast("❌ 有 "+res.errs.length+" 个错误,先修复再预览"); }
+  saveDraft();
+  window.open("app.html?draft=1", "_blank");
+});
+/* 拖拽导入 */
+["dragover","dragenter"].forEach(function(evname){
+  window.addEventListener(evname, function(e){ e.preventDefault(); document.getElementById("dropOverlay").style.display="flex"; });
+});
+["dragleave","drop"].forEach(function(evname){
+  window.addEventListener(evname, function(e){ if(evname==="drop" || e.target===document.documentElement) document.getElementById("dropOverlay").style.display="none"; });
+});
+window.addEventListener("drop", function(e){
+  e.preventDefault();
+  var f = e.dataTransfer.files && e.dataTransfer.files[0]; if(!f) return;
+  var rd = new FileReader();
+  rd.onload = function(){
+    try{
+      var txt = String(rd.result);
+      var cfg = /window\.FDE_CONFIG\s*=/.test(txt) ? JSON.parse(txt.match(/window\.FDE_CONFIG\s*=\s*([\s\S]+?);\s*$/)[1]) : JSON.parse(txt);
+      if(!cfg.stages) throw new Error("缺少 stages");
+      snapshot(); state.cfg = cfg; state.sel=null; saveDraft(); renderAll();
+      toast("拖入导入成功");
+    }catch(err){ alert("导入失败:"+err.message); }
+  };
+  rd.readAsText(f);
+});
+
+/* 快捷键 */
+document.addEventListener("keydown", function(e){
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="z"){ e.preventDefault(); e.shiftKey ? redo() : undo(); }
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="y"){ e.preventDefault(); redo(); }
+});
+
+/* tab 切换 */
+document.getElementById("treeTabs").addEventListener("click", function(e){
+  var b = e.target.closest("button"); if(!b) return;
+  state.tab = b.dataset.tab;
+  renderAll();
+});
+
+function renderAll(){
+  renderTree();
+  renderForm();
+  showValidation(validate());
+  document.getElementById("schemaTag").textContent = "schema " + (state.cfg.schemaVersion||"?");
+  document.querySelectorAll("#treeTabs button").forEach(function(x){ x.classList.toggle("on", x.dataset.tab===state.tab); });
+}
+</script>
+</body>
+</html>

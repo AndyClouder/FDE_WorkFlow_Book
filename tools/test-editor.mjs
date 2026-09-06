@@ -1,0 +1,105 @@
+/** tools/test-editor.mjs — editor.html 运行时冒烟测试(vm 沙箱) */
+import fs from "fs";
+import path from "path";
+import vm from "vm";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(__dirname, "..");
+
+function makeEl(id) {
+  return {
+    id, innerHTML: "", textContent: "", value: "", dataset: {},
+    style: { setProperty() {} },
+    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+    addEventListener() {}, appendChild() {}, remove() {}, click() {},
+    querySelectorAll() { return { forEach() {} }; }, querySelector() { return null; },
+    scrollIntoView() {}, closest() { return null; }, files: []
+  };
+}
+const els = {};
+const document = {
+  getElementById: (id) => els[id] || (els[id] = makeEl(id)),
+  querySelectorAll: () => ({ forEach() {} }), querySelector: () => null,
+  createElement: () => makeEl("tmp"), addEventListener() {},
+  body: { style: {}, insertBefore() {}, innerHTML: "" }, documentElement: { style: {} }
+};
+const window = { FDE_CONFIG: null, innerWidth: 1400, addEventListener() {}, open() {} };
+const ctx = {
+  window, document, console, location: { search: "" },
+  localStorage: { getItem: () => null, setItem() {} },
+  alert() {}, confirm() { return true; }, prompt(m, def) { return def; },
+  setTimeout, clearTimeout,
+  URL: { createObjectURL: () => "blob:x", revokeObjectURL() {} },
+  Blob: function (parts) { this.parts = parts; },
+  navigator: {}, getComputedStyle: () => ({ getPropertyValue: () => "#2563eb" })
+};
+ctx.window = window;
+vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(path.join(root, "data/config.js"), "utf8"), ctx);
+window.FDE_CONFIG = ctx.window.FDE_CONFIG;
+
+const scripts = [...fs.readFileSync(path.join(root, "editor.html"), "utf8")
+  .matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+scripts.forEach((s) => vm.runInContext(s, ctx));
+
+const R = vm.runInContext(`(
+function(){
+  var R = [];
+  var $ = function(id){ return document.getElementById(id); };
+  // 1 方法库树
+  state.tab = "methods"; renderTree();
+  R.push([($("treeScroll").innerHTML.match(/data-nav="method:/g) || []).length === 42, "方法库树 42 项"]);
+  R.push([($("treeScroll").innerHTML.match(/data-nav="pitfall:/g) || []).length === 0, "坑位不混入方法树"]);
+  // 2 坑位库
+  state.tab = "pitfalls"; renderTree();
+  R.push([($("treeScroll").innerHTML.match(/data-nav="pitfall:/g) || []).length === 8, "坑位库 8 项"]);
+  // 3 校验:干净 0 错
+  var res = validate();
+  R.push([res.errs.length === 0, "干净配置 0 错误" + (res.errs.length ? "(" + res.errs[0] + ")" : "")]);
+  // 4 悬空引用
+  state.cfg.stages[2].steps[0].activities[0].ref = "nonexist";
+  res = validate();
+  R.push([res.errs.some(function (e) { return e.indexOf("nonexist") >= 0; }), "悬空方法引用被捕获"]);
+  state.cfg.stages[2].steps[0].activities[0].ref = "sx";
+  state.cfg.stages[0].pitfalls.push("nope");
+  res = validate();
+  R.push([res.errs.some(function (e) { return e.indexOf("nope") >= 0; }), "悬空坑位引用被捕获"]);
+  state.cfg.stages[0].pitfalls.pop();
+  // 5 阶段表单
+  state.tab = "flow"; state.sel = { type: "stage", i: 2 }; renderAll();
+  R.push([$("formPane").innerHTML.indexOf("出门禁") >= 0, "阶段表单含门禁区块"]);
+  R.push([$("formPane").innerHTML.indexOf("检查清单") >= 0, "表单含检查清单"]);
+  // 6 步骤表单(活动分组)
+  state.sel = { type: "step", si: 2, pi: 3 }; renderAll();
+  R.push([$("formPane").innerHTML.indexOf("关联方法") >= 0, "步骤表单含活动编辑"]);
+  // 7 方法表单
+  state.sel = { type: "method", k: "mvd" }; renderAll();
+  R.push([$("formPane").innerHTML.indexOf("怎么用") >= 0, "方法表单渲染"]);
+  // 8 坑位表单
+  state.sel = { type: "pitfall", k: "k1" }; renderAll();
+  R.push([$("formPane").innerHTML.indexOf("怎么堵") >= 0, "坑位表单渲染"]);
+  // 9 导出回环
+  var out = configJsContent(state.cfg);
+  var m = out.match(/window\\.FDE_CONFIG\\s*=\\s*([\\s\\S]+?);\\s*$/);
+  var back = JSON.parse(m[1]);
+  R.push([back.stages.length === 7 && !!back.methods.mvd && !!back.pitfalls.k1, "导出 config.js 回环解析"]);
+  // 10 新增阶段 → 校验仍 0 错、树多一项
+  state.cfg.stages.push({ id: "s8new", color: "c7", title: "测试阶段", shortName: "8 · 测试", alias: "", goal: "", gate: { id: "G8", label: "测", short: "", text: "测试门禁", checklist: [] }, outputs: [], note: "", pitfalls: [], related: [], steps: [] });
+  state.tab = "flow"; state.sel = null; renderAll();
+  res = validate();
+  R.push([res.errs.length === 0 && ($("treeScroll").innerHTML.match(/data-nav="stage:/g) || []).length === 8, "新增阶段后树 8 项且校验仍通过"]);
+  state.cfg.stages.pop(); renderAll();
+  // 11 全局/横切线表单
+  state.tab = "meta"; state.sel = { type: "meta" }; renderAll();
+  R.push([$("formPane").innerHTML.indexOf("主标题") >= 0, "全局表单渲染"]);
+  state.sel = { type: "lane", li: 0 }; renderAll();
+  R.push([$("formPane").innerHTML.indexOf("横切线") >= 0, "横切线表单渲染"]);
+  return R;
+}
+)()`, ctx);
+
+let fail = 0;
+for (const [ok, name] of R) { console.log(ok ? "PASS" : "FAIL", name); if (!ok) fail++; }
+console.log(fail === 0 ? "---- editor 冒烟测试全部通过" : `---- FAILED ${fail}`);
+process.exit(fail ? 1 : 0);
