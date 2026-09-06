@@ -6,10 +6,28 @@
 <title>FDE 交付全流程拆解图(L1→L4 · 交互版)</title>
 <style>
   :root{
-    --ink:#18181b; --muted:#71717a; --faint:#a1a1aa;
-    --line:#e4e4e7; --line2:#f4f4f5;
-    --bg:#fafafa; --card:#ffffff; --exbg:#f7f7f8; --warn:#b91c1c;
+    --bg:#f4f5f7; --surface:#ffffff; --card:#ffffff;
+    --ink:#18181b; --ink2:#3f3f46; --muted:#71717a; --faint:#a1a1aa;
+    --line:#e4e4e7; --line2:#f0f0f2;
+    --exbg:#f7f7f8; --hover:#eef2ff;
+    --accent:#4f46e5; --accent-weak:#eef2ff;
+    --warn:#dc2626;
+    --backdrop:rgba(24,24,27,.38);
+    --head-glass:rgba(255,255,255,.88);
+    --s1:#3b82f6; --s2:#8b5cf6; --s3:#06b6d4; --s4:#10b981; --s5:#f59e0b; --s6:#f43f5e; --s7:#6366f1;
+    color-scheme:light;
     --zoom:1;
+  }
+  :root[data-theme="dark"]{
+    --bg:#101012; --surface:#1a1a1f; --card:#1a1a1f;
+    --ink:#ececef; --ink2:#c6c6cd; --muted:#9d9da6; --faint:#6b6b74;
+    --line:#2a2a2f; --line2:#232328;
+    --exbg:#202024; --hover:#1d2033;
+    --accent:#818cf8; --accent-weak:#1d2033;
+    --warn:#f87171;
+    --backdrop:rgba(0,0,0,.55);
+    --head-glass:rgba(16,16,18,.88);
+    color-scheme:dark;
   }
   *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
   html{scroll-behavior:smooth;}
@@ -22,43 +40,48 @@
 
   /* ── 工具栏 ── */
   #toolbar{
-    position:sticky; top:0; z-index:60; background:rgba(255,255,255,.94); backdrop-filter:blur(8px);
+    position:sticky; top:0; z-index:60; background:var(--head-glass); backdrop-filter:blur(8px);
     color:var(--ink); border-bottom:1px solid var(--line);
-    padding:12px 18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:12px 18px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
   }
   #toolbar .tt h1{font-size:15px; font-weight:600; letter-spacing:.2px;}
   #toolbar .tt .sub{font-size:11px; color:var(--muted); margin-top:2px;}
   #searchWrap{flex:1; min-width:180px; position:relative;}
   #search{
     width:100%; padding:7px 32px 7px 12px; border-radius:6px; font-size:13px;
-    border:1px solid var(--line); background:#fff; color:var(--ink); outline:none;
+    border:1px solid var(--line); background:var(--surface); color:var(--ink); outline:none;
   }
-  #search:focus{border-color:var(--faint);}
+  #search:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-weak);}
   #search::placeholder{color:var(--faint);}
   #searchClear{
     position:absolute; right:4px; top:50%; transform:translateY(-50%);
     background:none; border:none; color:var(--faint); font-size:14px; padding:4px 8px; display:none;
   }
+  #themeBtn{
+    background:var(--surface); color:var(--muted); border:1px solid var(--line);
+    border-radius:6px; padding:5px 11px; font-size:12px; flex:none;
+  }
+  #themeBtn:hover{color:var(--accent); border-color:var(--accent);}
   #toolbar .grp{display:flex; align-items:center; gap:6px;}
   #toolbar .grp button{
-    background:#fff; color:var(--muted); border:1px solid var(--line);
+    background:var(--surface); color:var(--muted); border:1px solid var(--line);
     border-radius:6px; padding:4px 10px; font-size:12px;
   }
-  #toolbar .grp button:hover{color:var(--ink); border-color:var(--faint);}
+  #toolbar .grp button:hover{color:var(--accent); border-color:var(--accent);}
   #zoomLabel{font-size:12px; color:var(--muted); min-width:38px; text-align:center;}
 
   /* ── 阶段快捷导航 ── */
   #quickNav{
     position:sticky; top:0; z-index:55; display:flex; gap:8px; overflow-x:auto;
-    padding:9px 14px; background:rgba(255,255,255,.94); backdrop-filter:blur(8px);
+    padding:9px 14px; background:var(--head-glass); backdrop-filter:blur(8px);
     border-bottom:1px solid var(--line); scrollbar-width:none;
   }
   #quickNav::-webkit-scrollbar{display:none;}
   #quickNav button{
-    flex:none; border:1px solid var(--line); background:#fff; color:var(--muted);
+    flex:none; border:1px solid var(--line); background:var(--surface); color:var(--muted);
     border-radius:6px; padding:5px 12px; font-size:12px; font-weight:500;
   }
-  #quickNav button:hover{color:var(--ink); border-color:var(--ink);}
+  #quickNav button:hover{color:var(--accent); border-color:var(--accent);}
 
   /* ── 画布 ── */
   #viewport{overflow:auto; padding:28px 18px 70px;}
@@ -71,35 +94,53 @@
 
   .flow{display:grid; grid-template-columns:repeat(7, 368px); gap:26px; align-items:start;}
 
-  /* ── L1 列 ── */
-  .col{background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden;}
-  .col-head{position:relative; padding:16px 16px 12px; cursor:pointer; user-select:none; border-top:2px solid var(--ink);}
-  .col-head:hover{background:#fcfcfc;}
+  /* ── L1 列(顶线/圆点用阶段色,其余中性) ── */
+  .col{background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden;
+       box-shadow:0 1px 2px rgba(24,24,27,.04);}
+  :root[data-theme="dark"] .col{box-shadow:none;}
+  .col-head{position:relative; padding:16px 16px 12px; cursor:pointer; user-select:none; border-top:2px solid var(--muted);}
+  .col-head:hover{background:var(--exbg);}
   .col-head .l1tag{font-size:10px; color:var(--faint); letter-spacing:2px; font-weight:500;}
   .col-head h2{font-size:15.5px; font-weight:600; margin-top:4px; line-height:1.4;}
   .col-head .alias{font-size:11px; color:var(--muted); margin-top:5px;}
   .col-head .tap{font-size:10.5px; color:var(--faint); margin-top:7px;}
-  .col-head::after{content:"→"; position:absolute; right:-21px; top:18px; color:var(--line); font-size:15px; z-index:5;}
+  .col-head:hover .tap{color:var(--accent);}
+  .col-head::after{content:"→"; position:absolute; right:-21px; top:18px; color:var(--faint); font-size:15px; z-index:5;}
   .col:last-child .col-head::after{content:"";}
+  .flow .col:nth-child(1) .col-head{border-top-color:var(--s1);}
+  .flow .col:nth-child(2) .col-head{border-top-color:var(--s2);}
+  .flow .col:nth-child(3) .col-head{border-top-color:var(--s3);}
+  .flow .col:nth-child(4) .col-head{border-top-color:var(--s4);}
+  .flow .col:nth-child(5) .col-head{border-top-color:var(--s5);}
+  .flow .col:nth-child(6) .col-head{border-top-color:var(--s6);}
+  .flow .col:nth-child(7) .col-head{border-top-color:var(--s7);}
   .gate{
     border-top:1px solid var(--line2); background:var(--exbg);
     font-size:11.5px; color:var(--ink); padding:7px 16px; cursor:pointer; letter-spacing:.2px;
   }
-  .gate:hover{color:#000;}
-  .col-body{padding:12px; display:flex; flex-direction:column; gap:10px; background:#fcfcfc; border-top:1px solid var(--line2);}
+  .gate:hover{color:var(--accent);}
+  .col-body{padding:12px; display:flex; flex-direction:column; gap:10px; background:transparent; border-top:1px solid var(--line2);}
 
   /* ── L2 卡 ── */
-  .l2card{background:#fff; border:1px solid var(--line2); border-radius:8px; overflow:hidden;}
+  .l2card{background:var(--surface); border:1px solid var(--line2); border-radius:8px; overflow:hidden;}
   .l2head{display:flex; align-items:baseline; gap:8px; padding:9px 12px; font-weight:600; font-size:12.5px;}
   .l2head .num{font-size:11px; font-weight:500; color:var(--faint); font-family:ui-monospace,Consolas,monospace;}
 
   /* ── L3 行(可点) ── */
   .l3row{padding:9px 12px; border-top:1px solid var(--line2); cursor:pointer; transition:background .12s;}
   .l3row:first-of-type{border-top:none;}
-  .l3row:hover{background:var(--exbg);}
-  .l3row:active{background:var(--line2);}
+  .l3row:hover{background:var(--hover);}
+  .l3row:hover .txt{color:var(--accent);}
+  .l3row:active{background:var(--accent-weak);}
   .l3{display:flex; align-items:flex-start; gap:8px; font-size:12.5px; line-height:1.55;}
   .l3 .dot{flex:none; width:5px; height:5px; border-radius:50%; background:var(--line); margin-top:7px;}
+  .flow .col:nth-child(1) .dot{background:var(--s1);}
+  .flow .col:nth-child(2) .dot{background:var(--s2);}
+  .flow .col:nth-child(3) .dot{background:var(--s3);}
+  .flow .col:nth-child(4) .dot{background:var(--s4);}
+  .flow .col:nth-child(5) .dot{background:var(--s5);}
+  .flow .col:nth-child(6) .dot{background:var(--s6);}
+  .flow .col:nth-child(7) .dot{background:var(--s7);}
   .l3 .code{flex:none; font-size:10px; color:var(--faint); font-family:ui-monospace,Consolas,monospace; margin-top:3px;}
   .l3 .txt{flex:1;}
   .out{display:inline-block; font-size:10.5px; color:var(--faint); margin-left:6px; white-space:nowrap;}
@@ -112,8 +153,8 @@
 
   /* ── 横切泳道 / 页脚 ── */
   .cross{margin-top:32px; display:grid; grid-template-columns:repeat(7, 368px); gap:26px;}
-  .cross .lane{grid-column:1 / -1; display:flex; align-items:flex-start; gap:16px; background:#fff;
-    border:1px solid var(--line); border-left:2px solid var(--ink); border-radius:8px; padding:12px 16px; font-size:12.5px;}
+  .cross .lane{grid-column:1 / -1; display:flex; align-items:flex-start; gap:16px; background:var(--surface);
+    border:1px solid var(--line); border-left:2px solid var(--accent); border-radius:8px; padding:12px 16px; font-size:12.5px;}
   .lane .lane-title{flex:none; font-weight:600; width:130px;}
   .lane .lane-body{color:var(--muted); line-height:1.7;}
   footer{
@@ -124,14 +165,14 @@
 
   /* ── 弹层:桌面右侧抽屉 / 手机底部抽屉 ── */
   #backdrop{
-    position:fixed; inset:0; background:rgba(24,24,27,.32); z-index:90;
+    position:fixed; inset:0; background:var(--backdrop); z-index:90;
     opacity:0; pointer-events:none; transition:opacity .2s;
   }
   #backdrop.open{opacity:1; pointer-events:auto;}
   #sheet{
-    position:fixed; z-index:95; background:#fff; display:flex; flex-direction:column;
+    position:fixed; z-index:95; background:var(--surface); display:flex; flex-direction:column;
     right:0; top:0; height:100%; width:min(440px, 92vw);
-    box-shadow:-8px 0 30px rgba(24,24,27,.10); border-left:1px solid var(--line);
+    box-shadow:-8px 0 30px rgba(0,0,0,.10); border-left:1px solid var(--line);
     transform:translateX(105%); transition:transform .25s ease;
   }
   #sheet.open{transform:translateX(0);}
@@ -140,13 +181,13 @@
     flex:none; display:flex; align-items:flex-start; gap:10px; padding:16px 16px 12px;
     border-bottom:1px solid var(--line);
   }
-  #sheetCat{flex:none; font-size:10px; font-weight:600; color:var(--muted); letter-spacing:2px; margin-top:4px;}
+  #sheetCat{flex:none; font-size:10px; font-weight:600; color:var(--accent); letter-spacing:2px; margin-top:4px;}
   #sheetTitle{flex:1; font-size:16px; line-height:1.4; font-weight:600;}
   #sheetBack{
-    flex:none; background:none; border:none; color:var(--muted);
+    flex:none; background:none; border:none; color:var(--accent);
     font-size:12px; padding:4px 6px; margin-top:1px;
   }
-  #sheetBack:hover{color:var(--ink);}
+  #sheetBack:hover{text-decoration:underline;}
   #sheetClose{
     flex:none; background:none; border:none; font-size:18px; line-height:1; color:var(--faint); padding:2px 6px;
   }
@@ -159,16 +200,16 @@
   .sec li{font-size:13px; line-height:1.7; margin-bottom:7px;}
   .sec ul{padding-left:16px;}
   .sec ul li{font-size:12.5px; line-height:1.7; margin-bottom:4px;}
-  .exbox{background:var(--exbg); border-left:2px solid var(--ink); border-radius:0; padding:10px 13px; font-size:12.5px; line-height:1.75; color:#3f3f46;}
-  .gatebox{background:var(--exbg); border-left:2px solid var(--ink); border-radius:0; padding:10px 13px; font-size:13px; line-height:1.7; font-weight:500;}
+  .exbox{background:var(--exbg); border-left:2px solid var(--accent); border-radius:0; padding:10px 13px; font-size:12.5px; line-height:1.75; color:var(--ink2);}
+  .gatebox{background:var(--exbg); border-left:2px solid var(--accent); border-radius:0; padding:10px 13px; font-size:13px; line-height:1.7; font-weight:500;}
   .tagrow{display:flex; flex-wrap:wrap; gap:8px;}
   .tagbtn{
-    border:1px solid var(--line); background:#fff; border-radius:6px;
+    border:1px solid var(--line); background:var(--surface); border-radius:6px;
     font-size:12px; padding:5px 11px; color:var(--muted);
   }
-  .tagbtn:hover{color:var(--ink); border-color:var(--faint);}
+  .tagbtn:hover{color:var(--accent); border-color:var(--accent);}
   .tagbtn.warn{color:var(--warn);}
-  .tagbtn.warn:hover{border-color:var(--warn);}
+  .tagbtn.warn:hover{border-color:var(--warn); color:var(--warn);}
   .srcline{font-size:11.5px; color:var(--faint); line-height:1.7; border-top:1px solid var(--line2); padding-top:12px;}
 
   /* ── 手机 ── */
@@ -186,7 +227,7 @@
     #sheet{
       left:0; right:0; bottom:0; top:auto; height:auto; max-height:84vh; width:100%;
       border-radius:14px 14px 0 0; transform:translateY(105%);
-      box-shadow:0 -8px 30px rgba(24,24,27,.12); border:1px solid var(--line); border-bottom:none;
+      box-shadow:0 -8px 30px rgba(0,0,0,.18); border:1px solid var(--line); border-bottom:none;
       padding-bottom:env(safe-area-inset-bottom);
     }
     #sheet.open{transform:translateY(0);}
@@ -198,6 +239,11 @@
     #toolbar,#quickNav,#backdrop,#sheet{display:none !important;}
     #viewport{padding:0; overflow:visible;}
     #stage{transform:none !important;}
+    :root, :root[data-theme="dark"]{
+      --bg:#fff; --surface:#fff; --card:#fff; --ink:#18181b; --ink2:#3f3f46;
+      --muted:#71717a; --faint:#a1a1aa; --line:#e4e4e7; --line2:#f0f0f2;
+      --exbg:#f7f7f8; --hover:#eef2ff; --accent:#4f46e5; --accent-weak:#eef2ff; --warn:#dc2626;
+    }
     body{background:#fff;}
   }
 </style>
@@ -213,6 +259,7 @@
     <input id="search" type="search" placeholder="搜索方法 / 步骤关键词…" autocomplete="off">
     <button id="searchClear" title="清除">✕</button>
   </div>
+  <button id="themeBtn" title="切换深色 / 浅色模式">深色</button>
   <div class="grp desktop-only">
     <button onclick="zoomBy(0.9)">−</button>
     <span id="zoomLabel">100%</span>
@@ -769,6 +816,23 @@ searchClear.addEventListener("click", function(){
   searchInput.value = "";
   searchInput.dispatchEvent(new Event("input"));
   searchInput.blur();
+});
+
+/* ══════════════ 深浅色主题 ══════════════ */
+var themeBtn = document.getElementById("themeBtn");
+function applyTheme(t){
+  document.documentElement.setAttribute("data-theme", t);
+  themeBtn.textContent = t === "dark" ? "浅色" : "深色";
+  try{ localStorage.setItem("fdemap-theme", t); }catch(e){}
+}
+(function initTheme(){
+  var saved = null;
+  try{ saved = localStorage.getItem("fdemap-theme"); }catch(e){}
+  var sys = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+  applyTheme(saved || sys);
+})();
+themeBtn.addEventListener("click", function(){
+  applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
 });
 
 /* ══════════════ 缩放(桌面) ══════════════ */
