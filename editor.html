@@ -159,6 +159,13 @@
 "use strict";
 /* ══════════════ 状态 ══════════════ */
 var DRAFT_KEY = "fde_editor_draft";
+var localServe = null; /* 伴生服务探测结果,启动即探一次用于状态条显示 */
+(function(){
+  fetch("/__ping", {cache:"no-store"})
+    .then(function(r){ localServe = r.ok ? {ok:true} : {ok:false}; })
+    .catch(function(){ localServe = {ok:false}; })
+    .finally(function(){ setSaveState("saved"); });
+})();
 var state = {
   cfg: null,          // 当前编辑的配置对象
   sel: null,          // {type:'stage'|'step'|'activity'|'method'|'pitfall'|'meta', path:[indexes]}
@@ -210,13 +217,15 @@ function saveDraft(){
 }
 function setSaveState(s){
   var el = document.getElementById("saveState");
-  if(s==="saved"){ el.textContent = "草稿已自动保存 " + new Date().toTimeString().slice(0,5) + (fileHandle ? " · 📁 已关联文件" : " · 未保存到文件"); el.className = "saved"; }
+  var mode = localServe && localServe.ok ? "服务模式" : (fileHandle ? "已关联文件" : "");
+  if(s==="saved"){ el.textContent = "草稿已自动保存 " + new Date().toTimeString().slice(0,5) + (mode ? " · 📁 " + mode : " · 未保存到文件"); el.className = "saved"; }
   else if(s==="dirty"){ el.textContent = "● 有未保存到文件的修改 — 点「💾 保存到文件」"; el.className = "dirty"; }
-  else if(s==="fsaved"){ el.textContent = "✅ 已写入 data/config.js " + new Date().toTimeString().slice(0,5); el.className = "fsaved"; }
+  else if(s==="fsaved"){ el.textContent = "✅ 已写入 data/config.js " + new Date().toTimeString().slice(0,5) + (localServe && localServe.ok ? "(服务直写)" : ""); el.className = "fsaved"; }
   else if(s==="err"){ el.textContent = "⚠ 草稿保存失败(可能超出 localStorage 上限)"; el.className = "err"; }
 }
 
-/* 保存到文件:优先 File System Access API 直写;否则降级下载 */
+/* 保存到文件:优先级 本地服务直写(免选路径) > File System Access 句柄 > 下载降级 */
+
 async function saveToFile(){
   var res = validate();
   if(res.errs.length){
@@ -224,6 +233,27 @@ async function saveToFile(){
     toast("❌ 存在 " + res.errs.length + " 个校验错误,修复后再保存(详见顶部横幅)", 3500);
     return;
   }
+  /* 0) 本地伴生服务:POST /__save 直写,路径全自动 */
+  try{
+    if(localServe === null){
+      localServe = await fetch("/__ping", {cache:"no-store"}).then(function(r){ return r.ok ? {ok:true} : {ok:false}; }).catch(function(){ return {ok:false}; });
+    }
+    if(localServe.ok){
+      var sv = await fetch("/__save", {
+        method: "POST",
+        headers: { "Content-Type": "text/javascript; charset=utf-8" },
+        body: configJsContent(state.cfg)
+      }).then(function(r){ return r.json(); });
+      if(sv.ok){
+        markFileSaved(); saveDraft();
+        toast("✅ 已自动保存到 data/config.js" + (sv.backup ? "(旧版备份为 config.backup.js)" : ""), 3000);
+        return;
+      }
+      toast("❌ 服务保存失败:" + (sv.error || "未知错误"));
+      return;
+    }
+  }catch(e){ /* 服务异常 → 走下方通道 */ }
+
   /* 1) 已有句柄 → 直接复用(可能弹一次权限确认) */
   if(fileHandle){
     try{
@@ -261,7 +291,10 @@ async function saveToFile(){
   /* 3) 降级:下载文件 + 操作指引 */
   downloadFile("config.js", configJsContent(state.cfg), "text/javascript");
   setSaveState("saved");
-  alert("当前浏览器不支持网页直写本地文件(建议用 Chrome 或 Edge 打开 editor.html)。\n\n已为你下载 config.js,请手动把它移动到项目 data/ 目录覆盖原文件,即完成保存。");
+  alert("当前是 file:// 直开模式,网页无法自动定位项目路径。两种更省事的方式:\n\n" +
+        "① 推荐:双击项目根目录 start-editor.bat —— 启动本地服务后,「保存」全自动写入 data/config.js,无需选路径;\n" +
+        "② 或用 Chrome/Edge 打开本页,点保存时选择 data/config.js 授权一次,之后一键直写。\n\n" +
+        "本次已为你下载 config.js,请手动移动到 data/ 目录覆盖。");
 }
 
 /* 关闭页面前:有未保存到文件的改动时提醒 */

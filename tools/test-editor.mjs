@@ -32,7 +32,8 @@ const ctx = {
   setTimeout, clearTimeout,
   URL: { createObjectURL: () => "blob:x", revokeObjectURL() {} },
   Blob: function (parts) { this.parts = parts; },
-  navigator: {}, getComputedStyle: () => ({ getPropertyValue: () => "#2563eb" })
+  navigator: {}, getComputedStyle: () => ({ getPropertyValue: () => "#2563eb" }),
+  fetch: () => Promise.reject(new Error("offline stub")) /* 服务探测桩:file:// 下视为无服务 */
 };
 ctx.window = window;
 vm.createContext(ctx);
