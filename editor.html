@@ -33,6 +33,8 @@
   #saveState{font-size:11.5px; color:#94a3b8; margin-left:auto;}
   #saveState.dirty{color:#fbbf24;}
   #saveState.saved{color:#4ade80;}
+  #saveState.fsaved{color:#4ade80; font-weight:600;}
+  #saveState.err{color:#f87171;}
 
   /* ── 校验横幅 ── */
   #vbanner{display:none; background:#fef2f2; color:#b91c1c; border-bottom:1px solid #fecaca;
@@ -125,10 +127,10 @@
   <button id="btnNew">新建空白</button>
   <button id="btnImport">导入 JSON</button>
   <button id="btnExportJson">导出 JSON</button>
-  <button id="btnExportConfig" class="primary">导出 config.js</button>
   <button id="btnValidate">校验</button>
   <button id="btnPreview">预览</button>
   <button id="btnReset">还原配置</button>
+  <button id="btnSave" class="primary">💾 保存到文件</button>
   <span id="saveState"></span>
   <input type="file" id="fileInput" accept=".json,.js" style="display:none">
 </div>
@@ -190,20 +192,113 @@ function undo(){ if(!undoStack.length) return toast("没有可撤销的操作");
 function redo(){ if(!redoStack.length) return toast("没有可重做的操作"); undoStack.push(JSON.stringify(state.cfg)); state.cfg = JSON.parse(redoStack.pop()); saveDraft(); renderAll(); }
 var undoStack = [], redoStack = [];
 
-/* ══════════════ 草稿保存 ══════════════ */
+/* ══════════════ 草稿保存(localStorage)+ 文件保存(File System Access) ══════════════ */
 var saveTimer = null;
+var fileHandle = null;          // 已授权的 data/config.js 句柄
+var fileSavedSnapshot = null;   // 上次成功写入文件时的配置快照(判断「有未保存到文件的改动」)
+
+function cfgString(){ return JSON.stringify(state.cfg); }
+function fileDirty(){ return fileSavedSnapshot !== null && fileSavedSnapshot !== cfgString(); }
+function markFileSaved(){ fileSavedSnapshot = cfgString(); setSaveState("fsaved"); }
+
 function saveDraft(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(function(){
-    try{ localStorage.setItem(DRAFT_KEY, JSON.stringify(state.cfg)); setSaveState("saved"); }
+    try{ localStorage.setItem(DRAFT_KEY, cfgString()); if(fileDirty()) setSaveState("dirty"); else setSaveState("saved"); }
     catch(e){ setSaveState("err"); }
   }, 300);
 }
 function setSaveState(s){
   var el = document.getElementById("saveState");
-  if(s==="saved"){ el.textContent = "✓ 草稿已保存 " + new Date().toTimeString().slice(0,5); el.className = "saved"; }
-  else if(s==="err"){ el.textContent = "⚠ 草稿保存失败(可能超出存储上限)"; el.className = "dirty"; }
+  if(s==="saved"){ el.textContent = "草稿已自动保存 " + new Date().toTimeString().slice(0,5) + (fileHandle ? " · 📁 已关联文件" : " · 未保存到文件"); el.className = "saved"; }
+  else if(s==="dirty"){ el.textContent = "● 有未保存到文件的修改 — 点「💾 保存到文件」"; el.className = "dirty"; }
+  else if(s==="fsaved"){ el.textContent = "✅ 已写入 data/config.js " + new Date().toTimeString().slice(0,5); el.className = "fsaved"; }
+  else if(s==="err"){ el.textContent = "⚠ 草稿保存失败(可能超出 localStorage 上限)"; el.className = "err"; }
 }
+
+/* 保存到文件:优先 File System Access API 直写;否则降级下载 */
+async function saveToFile(){
+  var res = validate();
+  if(res.errs.length){
+    showValidation(res);
+    toast("❌ 存在 " + res.errs.length + " 个校验错误,修复后再保存(详见顶部横幅)", 3500);
+    return;
+  }
+  /* 1) 已有句柄 → 直接复用(可能弹一次权限确认) */
+  if(fileHandle){
+    try{
+      var perm = await fileHandle.queryPermission({mode:"readwrite"});
+      if(perm !== "granted"){
+        perm = await fileHandle.requestPermission({mode:"readwrite"});
+        if(perm !== "granted"){ toast("未获得文件写权限,请重新点保存并允许"); return; }
+      }
+      var w = await fileHandle.createWritable();
+      await w.write(configJsContent(state.cfg));
+      await w.close();
+      markFileSaved(); saveDraft();
+      toast("✅ 已保存到 " + (fileHandle.name || "config.js"));
+      return;
+    }catch(e){ fileHandle = null; /* 句柄失效,走下方重新授权 */ }
+  }
+  /* 2) 首次:showSaveFilePicker 选定 data/config.js */
+  if(window.showSaveFilePicker){
+    try{
+      fileHandle = await window.showSaveFilePicker({
+        suggestedName: "config.js",
+        types: [{ description: "FDE 配置文件", accept: { "text/javascript": [".js"] } }]
+      });
+      var w2 = await fileHandle.createWritable();
+      await w2.write(configJsContent(state.cfg));
+      await w2.close();
+      markFileSaved(); saveDraft();
+      toast("✅ 已保存到 " + fileHandle.name + (fileHandle.name === "config.js" ? "(建议存到项目 data/ 目录覆盖原文件)" : ""));
+      return;
+    }catch(e){
+      if(e && e.name === "AbortError"){ toast("已取消保存"); return; }
+      /* 其他错误 → 降级下载 */
+    }
+  }
+  /* 3) 降级:下载文件 + 操作指引 */
+  downloadFile("config.js", configJsContent(state.cfg), "text/javascript");
+  setSaveState("saved");
+  alert("当前浏览器不支持网页直写本地文件(建议用 Chrome 或 Edge 打开 editor.html)。\n\n已为你下载 config.js,请手动把它移动到项目 data/ 目录覆盖原文件,即完成保存。");
+}
+
+/* 关闭页面前:有未保存到文件的改动时提醒 */
+window.addEventListener("beforeunload", function(e){
+  if(fileDirty()){ e.preventDefault(); e.returnValue = ""; }
+});
+
+/* 句柄持久化到 IndexedDB(下次打开免重新选文件) */
+(function(){
+  /* 极简 IndexedDB 封装:存/取单个句柄 */
+  var DB_NAME = "fde_editor", STORE = "handles";
+  function idb(){ return new Promise(function(ok, no){ var r = indexedDB.open(DB_NAME, 1);
+    r.onupgradeneeded = function(){ r.result.createObjectStore(STORE); };
+    r.onsuccess = function(){ ok(r.result); }; r.onerror = function(){ no(r.error); }; }); }
+  window.__idbSet = async function(key, val){ try{ var db = await idb(); var tx = db.transaction(STORE, "readwrite"); tx.objectStore(STORE).put(val, key); }catch(e){} };
+  window.__idbGet = async function(key){ try{ var db = await idb(); return await new Promise(function(ok, no){ var tx = db.transaction(STORE, "readonly"); var rq = tx.objectStore(STORE).get(key); rq.onsuccess = function(){ ok(rq.result); }; rq.onerror = function(){ no(rq.error); }; }); }catch(e){ return null; } };
+})();
+/* 启动时恢复句柄 */
+(async function(){
+  var h = await window.__idbGet("configHandle");
+  if(h){
+    try{
+      var perm = await h.queryPermission({mode:"readwrite"});
+      if(perm === "granted"){ fileHandle = h; fileSavedSnapshot = null; setSaveState("saved"); }
+      else { fileHandle = h; setSaveState("saved"); /* 已关联但需下次保存时授权 */ }
+    }catch(e){}
+  }
+})();
+/* 保存成功后持久化句柄 */
+var _origMarkFileSaved = markFileSaved;
+markFileSaved = function(){ _origMarkFileSaved(); if(fileHandle) window.__idbSet("configHandle", fileHandle); };
+
+document.getElementById("btnSave").addEventListener("click", saveToFile);
+/* Ctrl+S 快捷保存 */
+document.addEventListener("keydown", function(e){
+  if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==="s"){ e.preventDefault(); saveToFile(); }
+});
 
 /* ══════════════ 路径定位 ══════════════ */
 function getSel(){
@@ -757,12 +852,6 @@ function downloadFile(name, content, mime){
 function configJsContent(cfg){
   return "/* FDE 交付全流程配置(单一事实来源)\n * 由 editor.html 导出;覆盖 data/config.js 后 app.html 即生效。\n * 查看页:app.html  编辑器:editor.html  快照:index.html\n */\nwindow.FDE_CONFIG = " + JSON.stringify(cfg, null, 2) + ";\n";
 }
-document.getElementById("btnExportConfig").addEventListener("click", function(){
-  var res = validate();
-  if(res.errs.length && !confirm("当前配置存在 "+res.errs.length+" 个错误,仍要导出?")) return;
-  downloadFile("config.js", configJsContent(state.cfg), "text/javascript");
-  toast("已导出 config.js — 覆盖项目 data/config.js 后生效");
-});
 document.getElementById("btnExportJson").addEventListener("click", function(){
   downloadFile("fde-config-"+new Date().toISOString().slice(0,10)+".json", JSON.stringify(state.cfg, null, 2), "application/json");
   toast("已导出 JSON 备份");
