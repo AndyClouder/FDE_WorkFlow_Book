@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-page-node-id="g7AFkAIsB3VvlfTdoDfaFU">
-<head data-page-node-id="ot8wKFyLcVcidXpAvtIW7N">
-<meta charset="UTF-8" data-page-node-id="v8KgtsFIug46mrAdvWdfvD">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" data-page-node-id="KqPuJuyG0RCtyW4XpcPg3d">
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>FDE 交付全流程拆解图(L1→L4 · 配置驱动版)</title>
 <style>
   :root{
@@ -221,58 +221,58 @@
   }
 </style>
 </head>
-<body data-page-node-id="ocxIdUTTsh81w5z5pEsIsH">
+<body>
 
-<div id="toolbar" data-page-node-id="hx8Ay8iBWhHe76UI5RX1nB">
-  <div class="tt" data-page-node-id="aXxQzLI8K625ntELNNttM7">
-    <h1 id="tt-title" data-page-node-id="EyxSSIBUUk1rc6petKGm8D"></h1>
-    <div class="sub" id="tt-sub" data-page-node-id="urR8KrdylooMGF9hfCeA8m"></div>
+<div id="toolbar">
+  <div class="tt">
+    <h1 id="tt-title"></h1>
+    <div class="sub" id="tt-sub"></div>
   </div>
-  <div id="searchWrap" data-page-node-id="0Vpq2Ox2HSxjpK54awkXHx">
-    <input id="search" type="search" placeholder="搜索方法 / 步骤关键词…" autocomplete="off" data-page-node-id="Uf6hbfapNFPGal609gYsoD">
-    <button id="searchClear" title="清除" data-page-node-id="4CqDWXlwY2SCTCxgh16rD0">✕</button>
+  <div id="searchWrap">
+    <input id="search" type="search" placeholder="搜索方法 / 步骤关键词…" autocomplete="off">
+    <button id="searchClear" title="清除">✕</button>
   </div>
-  <div class="grp desktop-only" data-page-node-id="WIW0ohm0zaotqprXgtvBEQ">
-    <button onclick="zoomBy(0.9)" data-page-node-id="umJn2ybDmNbAoYq9CX14Oe">−</button>
-    <span id="zoomLabel" data-page-node-id="jNLO6E1iCKpNSyLN2TrlTY">100%</span>
-    <button onclick="zoomBy(1.1)" data-page-node-id="Xq5yO1GLPZXTFCKh4IlyHt">+</button>
-    <button onclick="fitWidth()" data-page-node-id="cydsR9SB7HzzKAtBU2Kss5">适应宽度</button>
-    <button onclick="setZoom(1)" data-page-node-id="hfDzYKG1K4c0SsQjHVyy0G">100%</button>
+  <div class="grp desktop-only">
+    <button onclick="zoomBy(0.9)">−</button>
+    <span id="zoomLabel">100%</span>
+    <button onclick="zoomBy(1.1)">+</button>
+    <button onclick="fitWidth()">适应宽度</button>
+    <button onclick="setZoom(1)">100%</button>
   </div>
-  <button class="edlink" onclick="location.href='editor.html'" data-page-node-id="fZC3ca1KWxuDcGUHgM6hD5">✎ 编辑配置</button>
+  <button class="edlink" onclick="location.href='editor.html'">✎ 编辑配置</button>
 </div>
 
-<div id="quickNav" data-page-node-id="9AfsrYiE8X2OqVrwmAETtN"></div>
+<div id="quickNav"></div>
 
-<div id="viewport" data-page-node-id="1gF2JCYLsMtaDBpZyloQn5">
-<div id="stage" data-page-node-id="CeOHCF6bUCBqGM7e78z0Xb">
-  <div class="legendbar" data-page-node-id="KLrroZoty2lAw4ACZoxCxd">
-    <b data-page-node-id="fwyEeMOADiOlxgBYEo1C1j">图例</b>
-    <span data-page-node-id="XvNljdsiRb70xxNZsylE3w"><i class="chip" style="background:linear-gradient(90deg,#1e3a8a,#2563eb)" data-page-node-id="fNcDkxBtQZqB4szKcmY4xt"></i>L1 阶段(点击看阶段说明)</span>
-    <span data-page-node-id="38CUnn1CkUGugORZFIjVp3"><i class="chip" style="background:#334155" data-page-node-id="Y7TZZIBMMTLtsIlIZRS2vT"></i>L2 子流程卡</span>
-    <span data-page-node-id="W6w2tcR9ZoBQ0w1VqQV9ze"><i class="chip" style="background:#94a3b8" data-page-node-id="bGpxwLDxlk3CrGkY1YuFFV"></i>L3 活动(点击看「怎么用+例子」)</span>
-    <span data-page-node-id="1A0SFWphMLpdDO8h4d1Dch"><i class="chip" style="background:var(--gate)" data-page-node-id="CW7oTVIAbXHIjrCdI90c4J"></i>出门禁(点击看判据)</span>
-    <span data-page-node-id="Z1SbbwlSpTyAoski8P3ErI"><i class="chip" style="background:var(--outbg);border:1px solid var(--outline)" data-page-node-id="yV1cYCS61SDgNXbptUDmdj"></i>关键产出物</span>
-    <span style="color:var(--warn)" data-page-node-id="R9ayamSre2vJNtlkDBLXR5">⚠ 点击 = 对应坑位详情</span>
+<div id="viewport">
+<div id="stage">
+  <div class="legendbar">
+    <b>图例</b>
+    <span><i class="chip" style="background:linear-gradient(90deg,#1e3a8a,#2563eb)"></i>L1 阶段(点击看阶段说明)</span>
+    <span><i class="chip" style="background:#334155"></i>L2 子流程卡</span>
+    <span><i class="chip" style="background:#94a3b8"></i>L3 活动(点击看「怎么用+例子」)</span>
+    <span><i class="chip" style="background:var(--gate)"></i>出门禁(点击看判据)</span>
+    <span><i class="chip" style="background:var(--outbg);border:1px solid var(--outline)"></i>关键产出物</span>
+    <span style="color:var(--warn)">⚠ 点击 = 对应坑位详情</span>
   </div>
 
-  <div class="flow" id="flow" data-page-node-id="g0LlImrUgHkhQmea9Ywtrl"></div>
-  <div id="noMatch" data-page-node-id="azOfZadUxOnZjT89oARZNc">没有匹配的步骤,换个关键词试试</div>
-  <div class="cross" id="cross" data-page-node-id="oPtDq0D6iOP4HqR6uAhiZo"></div>
-  <footer id="footer" data-page-node-id="Qufjw8XHWpAzgmV3aHWvAa"></footer>
+  <div class="flow" id="flow"></div>
+  <div id="noMatch">没有匹配的步骤,换个关键词试试</div>
+  <div class="cross" id="cross"></div>
+  <footer id="footer"></footer>
 </div>
 </div>
 
-<div id="backdrop" data-page-node-id="F6vMgpUUGR3Ahgp4hKHPcv"></div>
-<aside id="sheet" role="dialog" aria-modal="true" data-page-node-id="MpQx5qB7oimXAVizP9uFjz">
-  <div class="sheet-grip" data-page-node-id="Tp5K12Ad0dxDIuyF9zMjXL"></div>
-  <div class="sheet-head" data-page-node-id="g1qn5BTUMomp494WgA4K2K">
-    <span id="sheetCat" data-page-node-id="9NhSFvnp7NwZepSnEbcsZD"></span>
-    <h3 id="sheetTitle" data-page-node-id="Ke7cofoqATT1SyhDLEaQGq"></h3>
-    <button id="sheetBack" data-page-node-id="CO9jZG7s7g36rBnnLjIOXP">← 返回</button>
-    <button id="sheetClose" title="关闭" data-page-node-id="cV3unGYnBKAzPIkub5gPbB">✕</button>
+<div id="backdrop"></div>
+<aside id="sheet" role="dialog" aria-modal="true">
+  <div class="sheet-grip"></div>
+  <div class="sheet-head">
+    <span id="sheetCat"></span>
+    <h3 id="sheetTitle"></h3>
+    <button id="sheetBack">← 返回</button>
+    <button id="sheetClose" title="关闭">✕</button>
   </div>
-  <div class="sheet-body" id="sheetBody" data-page-node-id="RQUD8upGuPxduY5AOD66VL"></div>
+  <div class="sheet-body" id="sheetBody"></div>
 </aside>
 
 <script src="data/config.js"></script>
