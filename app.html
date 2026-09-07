@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>FDE 交付全流程拆解图(L1→L4 · 配置驱动版)</title>
+<style>
+  :root{
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#fff;
+    --l4:#475569; --gate:#ea580c; --warn:#dc2626;
+    --outbg:#ecfeff; --outink:#0e7490; --outline:#a5f3fc;
+    --c1:#2563eb; --c2:#7c3aed; --c3:#0891b2; --c4:#16a34a;
+    --c5:#d97706; --c6:#e11d48; --c7:#4f46e5;
+    --zoom:1;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:"Microsoft YaHei","PingFang SC","Segoe UI",sans-serif;
+    background:var(--bg); color:var(--ink); font-size:14px;
+    touch-action:manipulation;
+  }
+  button{font-family:inherit; cursor:pointer;}
+
+  /* ── 工具栏 ── */
+  #toolbar{
+    position:sticky; top:0; z-index:60; background:#0f172a; color:#e2e8f0;
+    padding:10px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    box-shadow:0 2px 8px rgba(0,0,0,.25);
+  }
+  #toolbar .tt h1{font-size:16px; font-weight:700; letter-spacing:.3px;}
+  #toolbar .tt .sub{font-size:11px; color:#94a3b8; margin-top:1px;}
+  #searchWrap{flex:1; min-width:180px; position:relative;}
+  #search{
+    width:100%; padding:8px 34px 8px 12px; border-radius:8px; font-size:13.5px;
+    border:1px solid #334155; background:#1e293b; color:#e2e8f0; outline:none;
+  }
+  #search:focus{border-color:#64748b;}
+  #searchClear{
+    position:absolute; right:4px; top:50%; transform:translateY(-50%);
+    background:none; border:none; color:#94a3b8; font-size:16px; padding:4px 8px; display:none;
+  }
+  #toolbar .grp{display:flex; align-items:center; gap:6px;}
+  #toolbar .grp button{
+    background:#1e293b; color:#e2e8f0; border:1px solid #334155;
+    border-radius:6px; padding:5px 10px; font-size:12.5px;
+  }
+  #toolbar .grp button:hover{background:#334155;}
+  #zoomLabel{font-size:12px; color:#cbd5e1; min-width:38px; text-align:center;}
+  #toolbar .edlink{
+    background:#16a34a; color:#fff; border:none; border-radius:6px;
+    padding:5px 12px; font-size:12.5px; font-weight:600;
+  }
+  #toolbar .edlink:hover{background:#15803d;}
+
+  /* ── 阶段快捷导航(彩底白字) ── */
+  #quickNav{
+    position:sticky; top:0; z-index:55; display:flex; gap:8px; overflow-x:auto;
+    padding:8px 12px; background:#fff; border-bottom:1px solid var(--line);
+    scrollbar-width:none;
+  }
+  #quickNav::-webkit-scrollbar{display:none;}
+  #quickNav button{
+    flex:none; border:none; color:#fff;
+    border-radius:999px; padding:6px 14px; font-size:12.5px; font-weight:600;
+    box-shadow:0 1px 3px rgba(15,23,42,.18);
+  }
+
+  /* ── 画布 ── */
+  #viewport{overflow:auto; padding:20px 16px 60px;}
+  #stage{transform:scale(var(--zoom)); transform-origin:top left; width:max-content; margin:0 auto;}
+  .legendbar{
+    display:flex; gap:14px; flex-wrap:wrap; align-items:center; width:max-content; max-width:100%;
+    margin:0 auto 16px; padding:9px 14px; background:#fff; border:1px solid var(--line);
+    border-radius:10px; font-size:12px; color:var(--muted);
+  }
+  .legendbar b{color:var(--ink);}
+  .chip{display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-1px; margin-right:4px;}
+
+  .flow{display:grid; grid-template-columns:repeat(7, 372px); gap:28px; align-items:start;}
+
+  /* ── L1 列 ── */
+  .col{background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden;
+       box-shadow:0 1px 4px rgba(15,23,42,.06);}
+  .col-head{position:relative; color:#fff; padding:12px 14px 10px; cursor:pointer; user-select:none;}
+  .col-head:active{filter:brightness(1.08);}
+  .col-head .l1tag{font-size:10.5px; opacity:.85; letter-spacing:1px;}
+  .col-head h2{font-size:16px; font-weight:700; margin-top:2px; line-height:1.35;}
+  .col-head .alias{font-size:11px; opacity:.85; margin-top:4px;}
+  .col-head .tap{font-size:10px; opacity:.75; margin-top:5px;}
+  .col-head::after{content:"➜"; position:absolute; right:-25px; top:16px; color:#94a3b8; font-size:16px; font-weight:700; z-index:5;}
+  .col:last-child .col-head::after{content:"";}
+  .gate{background:var(--gate); color:#fff; font-size:12px; padding:6px 14px; font-weight:600; cursor:pointer;}
+  .gate:active{filter:brightness(1.1);}
+  .col-body{padding:12px; display:flex; flex-direction:column; gap:12px; background:#f8fafc;}
+
+  /* ── L2 卡 ── */
+  .l2card{background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden;}
+  .l2head{display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line);
+          font-weight:700; font-size:13px;}
+  .l2head .num{font-size:10.5px; font-weight:700; color:#fff; border-radius:5px; padding:2px 7px; flex:none;}
+
+  /* ── L3 行(可点) ── */
+  .l3row{padding:9px 12px; border-top:1px dashed #eef2f7; cursor:pointer; transition:background .12s;}
+  .l3row:first-of-type{border-top:none;}
+  .l3row:hover{background:#f1f5f9;}
+  .l3row:active{background:#e2e8f0;}
+  .l3{display:flex; align-items:flex-start; gap:7px; font-size:13px; line-height:1.45;}
+  .l3 .dot{flex:none; width:7px; height:7px; border-radius:50%; margin-top:6px;}
+  .l3 .code{flex:none; font-size:10px; color:var(--muted); font-family:Consolas,monospace; margin-top:2px;}
+  .l3 .txt{flex:1;}
+  .out{display:inline-block; font-size:10.5px; background:var(--outbg); color:var(--outink);
+       border:1px solid var(--outline); border-radius:999px; padding:0 8px; margin-left:6px; white-space:nowrap; vertical-align:1px;}
+  .out.opt{opacity:.75;}
+  .actgate{display:inline-block; font-size:10.5px; background:#fff7ed; color:#9a3412;
+       border:1px solid #fed7aa; border-radius:999px; padding:0 8px; margin-left:6px; white-space:nowrap; vertical-align:1px; font-weight:600;}
+  .warnchip{
+    display:inline-block; margin-top:5px; font-size:11px; color:var(--warn);
+    background:#fef2f2; border:1px solid #fecaca; border-radius:999px; padding:2px 9px; font-weight:600;
+  }
+
+  /* ── 横切泳道 / 页脚 ── */
+  .cross{margin-top:28px; display:grid; grid-template-columns:repeat(7, 372px); gap:28px;}
+  .cross .lane{grid-column:1 / -1; display:flex; align-items:flex-start; gap:14px; background:#fff;
+    border:1px solid var(--line); border-left:6px solid var(--muted); border-radius:10px; padding:10px 16px; font-size:13px;}
+  .lane .lane-title{flex:none; font-weight:700; width:120px;}
+  .lane .lane-body{color:var(--l4); line-height:1.6;}
+  .lane-resp{border-left-color:#b91c1c;} .lane-colla{border-left-color:#1d4ed8;} .lane-accu{border-left-color:#0f766e;}
+  footer{
+    margin-top:20px; font-size:12px; color:var(--muted); line-height:1.7; width:100%;
+    background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 16px;
+  }
+  #noMatch{display:none; text-align:center; color:var(--muted); padding:40px 0; font-size:14px;}
+
+  /* ── 弹层:桌面右侧抽屉 / 手机底部抽屉 ── */
+  #backdrop{
+    position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:90;
+    opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  #backdrop.open{opacity:1; pointer-events:auto;}
+  #sheet{
+    position:fixed; z-index:95; background:#fff; display:flex; flex-direction:column;
+    right:0; top:0; height:100%; width:min(460px, 92vw);
+    box-shadow:-8px 0 30px rgba(15,23,42,.2); border-radius:0;
+    transform:translateX(105%); transition:transform .25s ease;
+  }
+  #sheet.open{transform:translateX(0);}
+  .sheet-grip{display:none;}
+  .sheet-head{
+    flex:none; display:flex; align-items:flex-start; gap:10px; padding:14px 16px 10px;
+    border-bottom:1px solid var(--line); background:#f8fafc;
+  }
+  #sheetCat{flex:none; font-size:11px; font-weight:700; color:#fff; border-radius:5px; padding:3px 8px; margin-top:2px;}
+  #sheetTitle{flex:1; font-size:16.5px; line-height:1.35;}
+  #sheetBack{
+    flex:none; background:#fff; border:1px solid var(--line); color:var(--muted);
+    border-radius:6px; font-size:12px; padding:4px 9px; margin-top:1px;
+  }
+  #sheetClose{
+    flex:none; background:none; border:none; font-size:22px; line-height:1; color:var(--muted); padding:2px 6px;
+  }
+  .sheet-body{flex:1; overflow-y:auto; padding:14px 16px 30px; -webkit-overflow-scrolling:touch;}
+  .sec{margin-bottom:16px;}
+  .sec h4{font-size:12px; color:var(--muted); font-weight:700; letter-spacing:1px; margin-bottom:6px;}
+  .sec .one{font-size:14px; line-height:1.7;}
+  .sec ol{padding-left:20px;}
+  .sec li{font-size:13.5px; line-height:1.65; margin-bottom:6px;}
+  .sec ul{padding-left:18px;}
+  .sec ul li{font-size:13px; line-height:1.65; margin-bottom:4px;}
+  .exbox{background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 12px; font-size:13px; line-height:1.7;}
+  .gatebox{background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:10px 12px; font-size:13.5px; line-height:1.65; font-weight:600; color:#9a3412;}
+  .chk{list-style:none; padding:0; margin-top:8px;}
+  .chk li{
+    display:flex; gap:8px; align-items:flex-start; font-size:13px; line-height:1.6; margin-bottom:6px;
+    background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px 10px;
+  }
+  .chk li .bx{flex:none; width:15px; height:15px; border:1.5px solid var(--gate); border-radius:4px; margin-top:2px;}
+  .chk li .ev{display:block; font-size:11.5px; color:var(--muted); margin-top:3px;}
+  .tagrow{display:flex; flex-wrap:wrap; gap:8px;}
+  .tagbtn{
+    border:1px solid var(--line); background:#f8fafc; border-radius:999px;
+    font-size:12.5px; padding:6px 12px; color:var(--ink);
+  }
+  .tagbtn.warn{color:var(--warn); background:#fef2f2; border-color:#fecaca; font-weight:600;}
+  .tagbtn:active{background:#e2e8f0;}
+  .srcline{font-size:12px; color:var(--muted); line-height:1.6; border-top:1px dashed var(--line); padding-top:10px;}
+  .aliasline{
+    font-size:12.5px; color:#475569; background:#f8fafc; border:1px dashed var(--line);
+    border-radius:8px; padding:8px 12px; margin-bottom:16px; line-height:1.6;
+  }
+  .aliasline b{color:var(--ink);}
+
+  /* ── 手机 ── */
+  @media (max-width: 900px){
+    body{font-size:14px;}
+    #toolbar .tt .sub{display:none;}
+    .desktop-only{display:none !important;}
+    #stage{transform:none !important; width:100%;}
+    #viewport{padding:12px 10px 80px;}
+    .flow{grid-template-columns:1fr; gap:16px;}
+    .col-head::after{display:none;}
+    .cross{grid-template-columns:1fr; gap:10px;}
+    .legendbar{width:auto;}
+    .lane .lane-title{width:auto;}
+    .lane{flex-direction:column; gap:6px;}
+    #sheet{
+      left:0; right:0; bottom:0; top:auto; height:auto; max-height:84vh; width:100%;
+      border-radius:16px 16px 0 0; transform:translateY(105%);
+      box-shadow:0 -8px 30px rgba(15,23,42,.25); padding-bottom:env(safe-area-inset-bottom);
+    }
+    #sheet.open{transform:translateY(0);}
+    .sheet-grip{display:block; width:40px; height:4px; border-radius:2px; background:#cbd5e1; margin:8px auto 0;}
+    .sheet-head{padding-top:8px;}
+    #sheetTitle{font-size:15.5px;}
+  }
+  @media print{
+    #toolbar,#quickNav,#backdrop,#sheet{display:none !important;}
+    #viewport{padding:0; overflow:visible;}
+    #stage{transform:none !important;}
+    body{background:#fff;}
+  }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <div class="tt">
+    <h1 id="tt-title"></h1>
+    <div class="sub" id="tt-sub"></div>
+  </div>
+  <div id="searchWrap">
+    <input id="search" type="search" placeholder="搜索方法 / 步骤关键词…" autocomplete="off">
+    <button id="searchClear" title="清除">✕</button>
+  </div>
+  <div class="grp desktop-only">
+    <button onclick="zoomBy(0.9)">−</button>
+    <span id="zoomLabel">100%</span>
+    <button onclick="zoomBy(1.1)">+</button>
+    <button onclick="fitWidth()">适应宽度</button>
+    <button onclick="setZoom(1)">100%</button>
+  </div>
+  <button class="edlink" onclick="location.href='editor.html'">✎ 编辑配置</button>
+</div>
+
+<div id="quickNav"></div>
+
+<div id="viewport">
+<div id="stage">
+  <div class="legendbar">
+    <b>图例</b>
+    <span><i class="chip" style="background:linear-gradient(90deg,#1e3a8a,#2563eb)"></i>L1 阶段(点击看阶段说明)</span>
+    <span><i class="chip" style="background:#334155"></i>L2 子流程卡</span>
+    <span><i class="chip" style="background:#94a3b8"></i>L3 活动(点击看「怎么用+例子」)</span>
+    <span><i class="chip" style="background:var(--gate)"></i>出门禁(点击看判据)</span>
+    <span><i class="chip" style="background:var(--outbg);border:1px solid var(--outline)"></i>关键产出物</span>
+    <span style="color:var(--warn)">⚠ 点击 = 对应坑位详情</span>
+  </div>
+
+  <div class="flow" id="flow"></div>
+  <div id="noMatch">没有匹配的步骤,换个关键词试试</div>
+  <div class="cross" id="cross"></div>
+  <footer id="footer"></footer>
+</div>
+</div>
+
+<div id="backdrop"></div>
+<aside id="sheet" role="dialog" aria-modal="true">
+  <div class="sheet-grip"></div>
+  <div class="sheet-head">
+    <span id="sheetCat"></span>
+    <h3 id="sheetTitle"></h3>
+    <button id="sheetBack">← 返回</button>
+    <button id="sheetClose" title="关闭">✕</button>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
+</aside>
+
+<script src="data/config.js"></script>
+<script>
+/* ══════════════ 配置接入 + 校验 ══════════════ */
+var CFG = window.FDE_CONFIG;
+/* 预览模式:editor.html 的「预览」按钮以 ?draft=1 打开,读取编辑器草稿 */
+if(location.search.indexOf("draft=1") !== -1){
+  try{
+    var draft = localStorage.getItem("fde_editor_draft");
+    if(draft) CFG = JSON.parse(draft);
+  }catch(e){ console.warn("草稿读取失败,回退 data/config.js", e); }
+}
+(function(){
+  if(!CFG || !CFG.stages){ document.body.innerHTML = '<div style="padding:40px;font-size:15px;">❌ 配置加载失败:请检查 data/config.js 是否存在且语法正确</div>'; throw new Error("no config"); }
+  var errs = [];
+  if(!Array.isArray(CFG.stages) || !CFG.stages.length) errs.push("stages 为空");
+  CFG.stages.forEach(function(st){
+    if(!st.id) errs.push("存在缺少 id 的阶段");
+    (st.steps||[]).forEach(function(sp){
+      (sp.activities||[]).forEach(function(a){
+        if(a.ref && !CFG.methods[a.ref] && !CFG.pitfalls[a.ref] && !CFG.stages.some(function(s){return s.id===a.ref}))
+          errs.push("活动「"+a.text+"」引用了不存在的方法:"+a.ref);
+        (a.pitfallRefs||[]).forEach(function(p){ if(!CFG.pitfalls[p]) errs.push("活动「"+a.text+"」引用了不存在的坑位:"+p); });
+      });
+    });
+  });
+  if(errs.length){
+    console.warn("配置校验警告:\n"+errs.join("\n"));
+    var bar = document.createElement("div");
+    bar.style.cssText = "background:#fef2f2;color:#b91c1c;border-bottom:1px solid #fecaca;padding:8px 16px;font-size:12.5px;";
+    bar.textContent = "⚠ 配置校验发现 "+errs.length+" 个问题(详见控制台),页面按容错模式渲染";
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
+})();
+
+var COLORS = {c1:"var(--c1)", c2:"var(--c2)", c3:"var(--c3)", c4:"var(--c4)", c5:"var(--c5)", c6:"var(--c6)", c7:"var(--c7)", c8:"var(--c7)"};
+
+function esc(s){ if(s===undefined||s===null) return ""; return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+/* 编号自动重算:阶段序 = stages 下标;步骤序 = 阶段内下标;活动码 = 步骤序.活动序 */
+function renumber(){
+  CFG.stages.forEach(function(st, si){
+    st.no = String(si+1);
+    st.steps.forEach(function(sp, pi){
+      sp.no = st.no + "." + (pi+1);
+      sp.activities.forEach(function(a, ai){ a.code = sp.no + "." + (ai+1); });
+    });
+  });
+}
+
+/* ══════════════ 渲染 ══════════════ */
+function renderMap(){
+  renumber();
+  document.getElementById("tt-title").innerHTML = esc(CFG.meta.title) + ' <span style="font-weight:400;font-size:12px;">' + esc(CFG.meta.subtitle||"") + '</span>';
+  document.getElementById("tt-sub").textContent = CFG.meta.sub || "";
+
+  var html = "";
+  CFG.stages.forEach(function(st){
+    var colr = COLORS[st.color] || "var(--c1)";
+    html += '<div class="col" data-stage="'+esc(st.id)+'">';
+    html += '<div class="col-head" style="background:linear-gradient(135deg,'+shade(colr)+','+colr+')" onclick="openSheet(\''+esc(st.id)+'\')">';
+    html += '<div class="l1tag">L1 · 阶段 '+esc(st.no)+'</div><h2>'+esc(st.title)+'</h2><div class="alias">'+esc(st.alias||"")+'</div><div class="tap">点击查看阶段说明 →</div></div>';
+    html += '<div class="gate" onclick="openSheet(\''+esc(st.id)+'\')">🚪 '+esc(st.gate && st.gate.id ? st.gate.id+" "+st.gate.label+": "+st.gate.short : (st.gate&&st.gate.short)||"")+'</div>';
+    html += '<div class="col-body">';
+    st.steps.forEach(function(sp){
+      html += '<div class="l2card"><div class="l2head"><span class="num" style="background:'+colr+'">'+esc(sp.no)+'</span>'+esc(sp.title)+'</div>';
+      sp.activities.forEach(function(a){
+        var target = a.ref || st.id;
+        html += '<div class="l3row" onclick="openSheet(\''+esc(target)+'\')">';
+        html += '<div class="l3"><span class="dot" style="background:'+colr+'"></span><span class="code">'+esc(a.code)+'</span><span class="txt">'+esc(a.text);
+        (a.outputs||[]).forEach(function(o){ html += '<span class="out'+(o.required===false?" opt":"")+'">'+esc(o.name)+'</span>'; });
+        if(a.gate) html += '<span class="actgate">✓ '+esc(a.gate)+'</span>';
+        html += '</span></div>';
+        (a.pitfallRefs||[]).forEach(function(w){
+          var wp = CFG.pitfalls[w];
+          if(wp){ var parts = String(wp.t).split(" · "); html += '<div><button class="warnchip" onclick="event.stopPropagation();openSheet(\''+esc(w)+'\')">⚠ '+(parts[1]||parts[0])+' — 点击看坑详情</button></div>'; }
+        });
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+    html += '</div></div>';
+  });
+  document.getElementById("flow").innerHTML = html;
+
+  var nav = "";
+  CFG.stages.forEach(function(st){
+    var colr = COLORS[st.color] || "var(--c1)";
+    nav += '<button data-target="'+esc(st.id)+'" style="background:linear-gradient(90deg,'+shade(colr)+','+colr+');color:#fff" '+
+           'onclick="jumpTo(\''+esc(st.id)+'\')" onmouseenter="this.style.filter=\'brightness(1.15)\'" onmouseleave="this.style.filter=\'\'">'+esc(st.shortName || (st.no+" · "+st.title))+'</button>';
+  });
+  document.getElementById("quickNav").innerHTML = nav;
+
+  var cross = "";
+  (CFG.lanes||[]).forEach(function(l){
+    cross += '<div class="lane '+esc(l.cls||"")+'"><div class="lane-title">'+(l.icon?l.icon+" ":"")+esc(l.title)+'</div><div class="lane-body">'+l.body+'</div></div>';
+  });
+  document.getElementById("cross").innerHTML = cross;
+  document.getElementById("footer").innerHTML = CFG.footer || "";
+}
+function shade(hex){
+  var m = hex.replace(/^var\(/,"").replace(/\)$/,"");
+  var c = getComputedStyle(document.documentElement).getPropertyValue(m).trim() || hex;
+  var n = parseInt(c.slice(1),16), r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  function d(x){return Math.max(0, Math.round(x*0.55));}
+  return "rgb("+d(r)+","+d(g)+","+d(b)+")";
+}
+function jumpTo(id){
+  var el = document.querySelector('.col[data-stage="'+id+'"]');
+  if(el) el.scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+/* ══════════════ 弹层 ══════════════ */
+var navStack = [];
+function catColor(cat){
+  return cat==="坑位" ? "#dc2626" : cat==="阶段" ? "#0f172a" : cat==="概念" ? "#0891b2" : "#16a34a";
+}
+/* 统一详情查找:阶段 / 方法 / 坑位 */
+function findEntity(id){
+  var st = CFG.stages.find(function(s){ return s.id===id; });
+  if(st) return {cat:"阶段", t:"阶段 "+st.no+" · "+st.title, stage:st};
+  if(CFG.methods[id]) { var m=CFG.methods[id]; return {cat:m.cat||"打法", t:m.t, method:m}; }
+  if(CFG.pitfalls[id]) { var p=CFG.pitfalls[id]; return {cat:"坑位", t:p.t, pit:p}; }
+  return null;
+}
+function openSheet(id, push){
+  if(push===undefined) push = true;
+  var ent = findEntity(id);
+  if(!ent) return;
+  if(push) navStack.push(id);
+  var b = document.getElementById("sheetBody"), html = "";
+  document.getElementById("sheetCat").textContent = ent.cat;
+  document.getElementById("sheetCat").style.background = catColor(ent.cat);
+  document.getElementById("sheetTitle").textContent = ent.t;
+  document.getElementById("sheetBack").style.display = navStack.length>1 ? "" : "none";
+
+  if(ent.stage){
+    var st = ent.stage, g = st.gate || {};
+    if(st.alias) html += '<div class="aliasline"><b>别名：</b>'+esc(st.alias)+'</div>';
+    html += '<div class="sec"><h4>阶段目标</h4><div class="one">'+esc(st.goal)+'</div></div>';
+    html += '<div class="sec"><h4>出门禁 · '+(g.id?esc(g.id)+" ":"")+(g.label?esc(g.label):"")+'</h4><div class="gatebox">🚪 '+esc(g.text || g.short || "")+'</div>';
+    if(g.checklist && g.checklist.length){
+      html += '<ul class="chk">';
+      g.checklist.forEach(function(c){
+        html += '<li><span class="bx"></span><div>'+esc(c.item)+(c.evidence?'<span class="ev">📎 证据:'+esc(c.evidence)+'</span>':'')+'</div></li>';
+      });
+      html += '</ul>';
+    }
+    html += '</div>';
+    if(st.outputs && st.outputs.length){
+      html += '<div class="sec"><h4>关键产出</h4><ul>';
+      st.outputs.forEach(function(o){ html += '<li>'+esc(o.name)+(o.required===false?'(可选)':'')+'</li>'; });
+      html += '</ul></div>';
+    }
+    if(st.note) html += '<div class="sec"><h4>阶段心得</h4><div class="exbox">'+esc(st.note)+'</div></div>';
+  } else if(ent.pit){
+    var p = ent.pit;
+    html += '<div class="sec"><h4>症状(怎么死)</h4><div class="one">'+esc(p.sym)+'</div></div>';
+    html += '<div class="sec"><h4>成因</h4><div class="one">'+esc(p.cause)+'</div></div>';
+    html += '<div class="sec"><h4>怎么堵</h4><div class="exbox">'+esc(p.fix)+'</div></div>';
+  } else if(ent.method){
+    var m = ent.method;
+    if(m.one) html += '<div class="sec"><h4>是什么</h4><div class="one">'+esc(m.one)+'</div></div>';
+    if(m.how && m.how.length){
+      html += '<div class="sec"><h4>怎么用</h4><ol>';
+      m.how.forEach(function(s){ html += '<li>'+esc(s)+'</li>'; });
+      html += '</ol></div>';
+    }
+    if(m.ex) html += '<div class="sec"><h4>小例子</h4><div class="exbox">💡 '+esc(m.ex)+'</div></div>';
+  }
+
+  /* 相关坑位(阶段取 pitfalls,方法取 pit) */
+  var pits = ent.stage ? (ent.stage.pitfalls||[]) : (ent.method && ent.method.pit) || [];
+  pits = pits.filter(function(pk){ return CFG.pitfalls[pk]; });
+  if(pits.length){
+    html += '<div class="sec"><h4>⚠ 跳过会踩的坑(点击看详情)</h4><div class="tagrow">';
+    pits.forEach(function(pk){ html += '<button class="tagbtn warn" onclick="openSheet(\''+esc(pk)+'\')">⚠ '+esc(CFG.pitfalls[pk].t)+'</button>'; });
+    html += '</div></div>';
+  }
+  /* 相关方法 */
+  var rels = ent.stage ? (ent.stage.related||[]) : (ent.method && ent.method.rel) || (ent.pit && ent.pit.rel) || [];
+  rels = rels.filter(function(rk){ return CFG.methods[rk]; });
+  if(rels.length){
+    html += '<div class="sec"><h4>相关方法(点击跳转)</h4><div class="tagrow">';
+    rels.forEach(function(rk){ html += '<button class="tagbtn" onclick="openSheet(\''+esc(rk)+'\')">'+esc(CFG.methods[rk].t)+'</button>'; });
+    html += '</div></div>';
+  }
+  var src = ent.method ? ent.method.src : (ent.pit ? "" : "");
+  if(src) html += '<div class="srcline"><b>来源:</b>'+esc(src)+'<br>内容浓缩自知识库对应 wiki 页《'+esc(ent.t.replace(/^坑\d+ · /,"坑").replace(/^阶段 \d+ · /,""))+'》;完整论证与置信度以库内页面为准。</div>';
+  else html += '<div class="srcline">内容浓缩自知识库 wiki 页面;完整论证与置信度以库内页面为准。</div>';
+
+  b.innerHTML = html;
+  b.scrollTop = 0;
+  document.getElementById("sheet").classList.add("open");
+  document.getElementById("backdrop").classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+function closeSheet(){
+  navStack = [];
+  document.getElementById("sheet").classList.remove("open");
+  document.getElementById("backdrop").classList.remove("open");
+  document.body.style.overflow = "";
+}
+function sheetBack(){
+  navStack.pop();
+  var prev = navStack[navStack.length-1];
+  if(prev) openSheet(prev, false);
+  else closeSheet();
+}
+document.getElementById("sheetClose").addEventListener("click", closeSheet);
+document.getElementById("sheetBack").addEventListener("click", sheetBack);
+document.getElementById("backdrop").addEventListener("click", closeSheet);
+document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeSheet(); });
+
+/* ══════════════ 搜索 ══════════════ */
+var searchInput = document.getElementById("search");
+var searchClear = document.getElementById("searchClear");
+searchInput.addEventListener("input", function(){
+  var q = searchInput.value.trim().toLowerCase();
+  searchClear.style.display = q ? "block" : "none";
+  var any = false;
+  document.querySelectorAll("#flow .col").forEach(function(col){
+    var colVisible = false;
+    col.querySelectorAll(".l2card").forEach(function(card){
+      var cardVisible = false;
+      card.querySelectorAll(".l3row").forEach(function(row){
+        var hit = !q || row.textContent.toLowerCase().indexOf(q) !== -1;
+        row.style.display = hit ? "" : "none";
+        if(hit) cardVisible = true;
+      });
+      var headHit = !q || card.querySelector(".l2head").textContent.toLowerCase().indexOf(q) !== -1;
+      card.style.display = (cardVisible || headHit) ? "" : "none";
+      if(cardVisible || headHit) colVisible = true;
+    });
+    col.style.display = colVisible ? "" : "none";
+    if(colVisible) any = true;
+  });
+  document.getElementById("noMatch").style.display = (q && !any) ? "block" : "none";
+});
+searchClear.addEventListener("click", function(){
+  searchInput.value = "";
+  searchInput.dispatchEvent(new Event("input"));
+  searchInput.blur();
+});
+
+/* ══════════════ 缩放(桌面) ══════════════ */
+var zoom = 1;
+function applyZoom(){
+  document.getElementById("stage").style.setProperty("--zoom", zoom);
+  document.getElementById("zoomLabel").textContent = Math.round(zoom*100)+"%";
+}
+function zoomBy(f){ zoom = Math.min(2, Math.max(0.2, zoom*f)); applyZoom(); }
+function setZoom(v){ zoom = v; applyZoom(); }
+function fitWidth(){
+  var st = document.getElementById("stage");
+  zoom = Math.min(1, (window.innerWidth-32) / st.scrollWidth);
+  applyZoom();
+}
+document.addEventListener("keydown", function(e){
+  if(e.key==="+"||e.key==="=") zoomBy(1.1);
+  if(e.key==="-") zoomBy(0.9);
+  if(e.key==="0") setZoom(1);
+});
+window.addEventListener("resize", function(){
+  if(window.innerWidth<=900) setZoom(1);
+});
+
+renderMap();
+if(window.innerWidth>900) fitWidth();
+</script>
+</body>
+</html>
