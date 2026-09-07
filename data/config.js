@@ -1,5 +1,5 @@
 /* FDE 交付全流程配置(单一事实来源)
- * 由 tools/build-config.mjs 从 index.html 迁移生成;之后由 editor.html 维护。
+ * 由 editor.html 导出;覆盖 data/config.js 后 app.html 即生效。
  * 查看页:app.html  编辑器:editor.html  快照:index.html
  */
 window.FDE_CONFIG = {
