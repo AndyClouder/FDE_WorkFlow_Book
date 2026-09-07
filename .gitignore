@@ -1,2 +1,5 @@
 # WorkBuddy 工作区内部数据(禁止提交)
 .workbuddy/
+
+# 编辑器伴生服务保存时自动生成的滚动备份
+data/config.backup.js
