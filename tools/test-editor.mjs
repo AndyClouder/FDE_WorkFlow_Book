@@ -12,7 +12,8 @@ function makeEl(id) {
     id, innerHTML: "", textContent: "", value: "", dataset: {},
     style: { setProperty() {} },
     classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
-    addEventListener() {}, appendChild() {}, remove() {}, click() {},
+    addEventListener(type, fn) { (this._h ??= {})[type] = fn; },
+    appendChild() {}, remove() {}, click() {},
     querySelectorAll() { return { forEach() {} }; }, querySelector() { return null; },
     scrollIntoView() {}, closest() { return null; }, files: []
   };
@@ -102,5 +103,60 @@ function(){
 
 let fail = 0;
 for (const [ok, name] of R) { console.log(ok ? "PASS" : "FAIL", name); if (!ok) fail++; }
+
+/* ── 回归:删除单个活动 / 单个步骤(修复前为红)──
+ * 反馈回路:捕获 treeFoot 的 click 监听器,直接以按钮事件调用,
+ * 断言 ① 点击树中活动后 sel.type 仍是 "activity"(不被重定向成 step)
+ *      ② fa-del 删除的恰好是那一个活动(步骤数、其余活动不动)
+ *      ③ fa-del 选中 step 时只删该步骤(阶段数、其余步骤不动)
+ * 注:state/els 均在 vm 沙箱内,断言需在沙箱里跑 */
+const R2 = vm.runInContext(`(
+function(){
+  var R = [];
+  var foot = document.getElementById("treeFoot");
+  var footHandler = foot && foot._h && foot._h.click;
+  if (typeof footHandler !== "function") {
+    R.push([false, "treeFoot click 监听器未注册(测试桩失效)"]);
+    return R;
+  }
+  function clickBtn(id){ footHandler({ target: { closest: function(){ return { id: id }; } } }); }
+
+  // A. 选中活动 → sel 保持 activity,且表单按活动渲染
+  state.tab = "flow";
+  state.sel = { type: "activity", si: 0, pi: 0, ai: 1 };
+  renderAll();
+  R.push([state.sel.type === "activity", "选中活动后 sel 保持 activity(不被重定向为 step)"]);
+
+  // B. 删除单个活动:只有目标活动消失
+  var st0 = state.cfg.stages[0];
+  var beforeActs = st0.steps[0].activities.map(function(a){ return a.text; });
+  var stepCountBefore = st0.steps.length;
+  clickBtn("fa-del");
+  var afterActs = st0.steps[0].activities.map(function(a){ return a.text; });
+  R.push([stepCountBefore === st0.steps.length
+    && afterActs.length === beforeActs.length - 1
+    && afterActs[0] === beforeActs[0]
+    && afterActs.indexOf(beforeActs[1]) < 0
+    && state.sel.type === "step" && state.sel.pi === 0,
+    "fa-del 删除的是单个活动(步骤保留,编号顺延)"]);
+
+  // C. 删除单个步骤:只有目标步骤消失
+  state.sel = { type: "step", si: 0, pi: 1 };
+  renderAll();
+  var stagesBefore = state.cfg.stages.length;
+  var stepsBefore = state.cfg.stages[0].steps.map(function(s){ return s.title; });
+  clickBtn("fa-del");
+  var stepsAfter = state.cfg.stages[0].steps.map(function(s){ return s.title; });
+  R.push([stagesBefore === state.cfg.stages.length
+    && stepsAfter.length === stepsBefore.length - 1
+    && stepsAfter.indexOf(stepsBefore[1]) < 0
+    && state.sel.type === "stage",
+    "fa-del 删除的是单个步骤(阶段保留)"]);
+  return R;
+}
+)()`, ctx);
+
+for (const [ok, name] of R2) { console.log(ok ? "PASS" : "FAIL", name); if (!ok) fail++; }
+
 console.log(fail === 0 ? "---- editor 冒烟测试全部通过" : `---- FAILED ${fail}`);
 process.exit(fail ? 1 : 0);

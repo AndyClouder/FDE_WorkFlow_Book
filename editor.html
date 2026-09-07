@@ -607,9 +607,21 @@ function renderForm(){
   }
 
   else if(sel.type==="activity"){
-    /* 兼容从校验跳转:重定向到所属步骤视图 */
-    state.sel = {type:"step", si:sel.si, pi:sel.pi};
-    return renderForm();
+    var stgA = cfg.stages[sel.si];
+    var spA = stgA.steps[sel.pi];
+    var aA = spA.activities[sel.ai];
+    html += '<div class="fcard"><h3>活动 '+stgA.no+'.'+(sel.pi+1)+'.'+(sel.ai+1)+' <span class="crumb">步骤「'+escHtml(spA.title)+'」· 阶段「'+escHtml(stgA.title)+'」</span></h3>';
+    html += fld("活动内容", ta("ac-text", aA.text, 3, "这一步具体做什么"));
+    var moptsA = [["","(不关联)"]].concat(Object.keys(cfg.methods).map(function(k){ return [k, cfg.methods[k].t+" ("+k+")"]; }));
+    html += fld("关联方法", selHtml("ac-ref", moptsA, aA.ref||""), "点击活动行时弹出的方法详情");
+    html += fld("关联坑位", pitChipList(aA.pitfallRefs));
+    html += fld("活动门禁", inp("ac-gate", aA.gate||"", "完成标准(可选),如:四段缺一段即不算 MVD"), "填写后地图行上会出现 ✓ 标记");
+    html += '</div>';
+    html += '<div class="fcard"><h3>📦 活动产出</h3><div class="rep" id="ac-outs">';
+    (aA.outputs||[]).forEach(function(o,oi){
+      html += '<div class="repitem"><input data-out="name" data-i="'+oi+'" value="'+escHtml(o.name)+'" placeholder="产出物名称">'+selHtml(null,[["1","必产"],["0","可选"]], o.required===false?"0":"1").replace('<select','<select data-out="req" data-i="'+oi+'"')+'<button class="del" data-out="del" data-i="'+oi+'">✕</button></div>';
+    });
+    html += '<button class="rep add" id="ac-addout">+ 产出物</button></div>';
   }
 
   else if(sel.type==="method"){
@@ -695,6 +707,13 @@ document.getElementById("formPane").addEventListener("input", function(ev){
     else if(t.id && t.id.indexOf("ac-gate-")===0){ var ai3=+t.id.slice(8); sp.activities[ai3].gate=v; touched=true; }
     else if(t.dataset && t.dataset.out==="name"){ sp.activities[+t.dataset.scope].outputs[+t.dataset.i].name=v; touched=true; }
   }
+  else if(sel.type==="activity"){
+    var aSel = cfg.stages[sel.si].steps[sel.pi].activities[sel.ai];
+    if(t.id==="ac-text"){ aSel.text=v; touched=true; }
+    else if(t.id==="ac-ref"){ aSel.ref=v; touched=true; }
+    else if(t.id==="ac-gate"){ aSel.gate=v; touched=true; }
+    else if(t.dataset && t.dataset.out==="name"){ aSel.outputs[+t.dataset.i].name=v; touched=true; }
+  }
   else if(sel.type==="method"){
     var m = cfg.methods[sel.k];
     if(t.id==="m-t"){ m.t=v; touched=true; }
@@ -740,18 +759,23 @@ document.getElementById("formPane").addEventListener("change", function(ev){
     if(t.id && t.id.indexOf("ac-ref-")===0){ sp.activities[+t.id.slice(7)].ref=t.value; saveDraft(); scheduleLightTree(); return; }
     if(t.dataset && t.dataset.out==="req"){ sp.activities[+t.dataset.scope].outputs[+t.dataset.i].required = t.value!=="0"; saveDraft(); return; }
   }
+  else if(sel.type==="activity"){
+    if(t.id==="ac-ref"){ cfg.stages[sel.si].steps[sel.pi].activities[sel.ai].ref=t.value; saveDraft(); scheduleLightTree(); return; }
+    if(t.dataset && t.dataset.out==="req"){ cfg.stages[sel.si].steps[sel.pi].activities[sel.ai].outputs[+t.dataset.i].required = t.value!=="0"; saveDraft(); return; }
+  }
   else if(sel.type==="method"){ if(t.id==="m-cat"){ cfg.methods[sel.k].cat=t.value; saveDraft(); return; } }
   else if(sel.type==="lane"){ if(t.id==="ln-cls"){ cfg.lanes[sel.li].cls=t.value; saveDraft(); return; } }
 });
 /* 点击类动作(chip 增删 / 产出物增删 / 检查项增删) */
 document.getElementById("formPane").addEventListener("click", function(ev){
-  var b = ev.target.closest("[data-act],[data-addout],#st-addout,#g-addchk,#g-delchk"); if(!b) return;
+  var b = ev.target.closest("[data-act],[data-addout],#st-addout,#g-addchk,#g-delchk,#ac-addout"); if(!b) return;
   var sel = state.sel; if(!sel) return;
   var cfg = state.cfg;
   var act = b.dataset.act;
   function arrFor(){
     if(sel.type==="stage") return {pit: cfg.stages[sel.i].pitfalls, rel: cfg.stages[sel.i].related};
     if(sel.type==="step") return {pit: cfg.stages[sel.si].steps[sel.pi].activities[b.dataset.scope] ? cfg.stages[sel.si].steps[sel.pi].activities[+b.dataset.scope].pitfallRefs : null, rel:null};
+    if(sel.type==="activity") return {pit: cfg.stages[sel.si].steps[sel.pi].activities[sel.ai].pitfallRefs, rel:null};
     if(sel.type==="method") return {pit: cfg.methods[sel.k].pit, rel: cfg.methods[sel.k].rel};
     if(sel.type==="pitfall") return {pit:null, rel: cfg.pitfalls[sel.k].rel};
     return {pit:null,rel:null};
@@ -774,6 +798,13 @@ document.getElementById("formPane").addEventListener("click", function(ev){
   if(b.dataset.out==="del"){
     if(sel.type==="stage") cfg.stages[sel.i].outputs.splice(+b.dataset.i,1);
     else if(sel.type==="step") cfg.stages[sel.si].steps[sel.pi].activities[+b.dataset.scope].outputs.splice(+b.dataset.i,1);
+    else if(sel.type==="activity") cfg.stages[sel.si].steps[sel.pi].activities[sel.ai].outputs.splice(+b.dataset.i,1);
+    saveDraft(); renderAll(); return;
+  }
+  if(b.id==="ac-addout"){
+    var aOut = cfg.stages[sel.si].steps[sel.pi].activities[sel.ai];
+    aOut.outputs = aOut.outputs||[];
+    aOut.outputs.push({name:"",required:true});
     saveDraft(); renderAll(); return;
   }
   if(b.dataset.addout!==undefined){
